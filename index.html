@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="description" content="LineBreaker - Addictive puzzle game where you stack blocks and clear lines!">
+    <meta name="keywords" content="linebreaker, block game, puzzle, tetris, mobile game, casual game">
+    <meta name="author" content="Your Name">
+    <meta name="theme-color" content="#667eea">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="LineBreaker - Puzzle Game">
+    <meta property="og:description" content="Stack blocks and clear lines in this addictive puzzle game!">
+    <meta property="og:type" content="game">
+    <meta property="og:image" content="icon.svg">
+    
+    <!-- Favicons -->
+    <link rel="icon" type="image/svg+xml" href="icon.svg">
+    
+    <title>LineBreaker - Puzzle Game</title>
+    <link rel="stylesheet" href="styles.css?v=4">
+</head>
+<body>
+    <div class="game-container">
+        <div class="game-info">
+            <div class="info-item">
+                <span class="label">Score:</span>
+                <span class="value" id="score">0</span>
+            </div>
+            <div class="info-item">
+                <span class="label">Lines:</span>
+                <span class="value" id="lines">0</span>
+            </div>
+            <div class="info-item">
+                <span class="label">Level:</span>
+                <span class="value" id="level">1</span>
+            </div>
+        </div>
+        
+        <div class="high-score-display">
+            🏆 Best: <span id="highScore">0</span>
+        </div>
+        
+        <button id="soundToggle" class="sound-toggle" title="Toggle Sound">🔊</button>
+        <button id="musicToggle" class="music-toggle" title="Toggle Music">🎵</button>
+        
+        <div class="canvas-wrapper">
+            <div class="canvas-container">
+                <canvas id="gameCanvas" width="240" height="432"></canvas>
+                <canvas id="particleCanvas" width="240" height="432"></canvas>
+            </div>
+            <div class="next-piece-container">
+                <p class="next-label">Next:</p>
+                <canvas id="nextShapeCanvas" width="70" height="70"></canvas>
+            </div>
+        </div>
+        
+        <div class="mobile-controls" id="mobileControls">
+            <div class="control-row">
+                <button class="control-btn" id="rotateBtn">↻</button>
+                <button class="control-btn" id="hardDropBtn">⬇</button>
+            </div>
+            <div class="control-row">
+                <button class="control-btn" id="leftBtn">←</button>
+                <button class="control-btn" id="downBtn">↓</button>
+                <button class="control-btn" id="rightBtn">→</button>
+            </div>
+        </div>
+        
+        <button id="pauseBtn" class="pause-btn hidden">⏸ Pause</button>
+        <button id="startBtn" class="start-btn">Start Game</button>
+        
+        <div id="tutorial" class="tutorial hidden">
+            <h3>How to Play</h3>
+            <p>📱 Use buttons to move and rotate blocks</p>
+            <p>🎯 Clear horizontal OR vertical lines</p>
+            <p>⬆️ Level up every 10 lines cleared</p>
+            <p>💎 Hard drop (⬇) for bonus points!</p>
+            <button id="closeTutorial" class="tutorial-btn">Got it!</button>
+        </div>
+        
+        <div id="pauseScreen" class="pause-screen hidden">
+            <h2>⏸ Paused</h2>
+            <button id="resumeBtn" class="resume-btn">Resume</button>
+        </div>
+        
+        <div id="gameOver" class="game-over hidden">
+            <h2>Game Over!</h2>
+            <p>Final Score: <span id="finalScore">0</span></p>
+            <p>Level Reached: <span id="finalLevel">1</span></p>
+            <p id="newHighScore" class="new-high-score hidden">🎉 NEW HIGH SCORE! 🎉</p>
+            <p class="high-score-text">Best Score: <span id="finalHighScore">0</span></p>
+            <button id="restartBtn" class="restart-btn">Play Again</button>
+        </div>
+        
+        <footer class="game-footer">
+            <a href="privacy.html">Privacy Policy</a> | 
+            <a href="terms.html">Terms of Service</a>
+        </footer>
+    </div>
+    
+    <script src="game.js?v=4"></script>
+</body>
+</html>

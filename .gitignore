@@ -1,0 +1,5 @@
+# Development files
+generate-icons.html
+README.md
+*.log
+.DS_Store
