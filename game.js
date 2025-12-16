@@ -701,7 +701,7 @@ function setupCanvasTouchControls() {
     const tapThreshold = 200; // Maximum time for tap (ms)
     
     canvas.addEventListener('touchstart', (e) => {
-        if (isPaused || gameOver) return;
+        if (isPaused) return;
         e.preventDefault();
         const touch = e.touches[0];
         touchStartX = touch.clientX;
@@ -710,7 +710,7 @@ function setupCanvasTouchControls() {
     }, { passive: false });
     
     canvas.addEventListener('touchend', (e) => {
-        if (isPaused || gameOver) return;
+        if (isPaused) return;
         e.preventDefault();
         const touch = e.changedTouches[0];
         const touchEndX = touch.clientX;
