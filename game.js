@@ -707,9 +707,12 @@ function setupCanvasTouchControls() {
         const absDeltaX = Math.abs(deltaX);
         const absDeltaY = Math.abs(deltaY);
         
-        // Tap to rotate (quick touch without much movement)
+        // Tap to rotate (quick touch without much movement, only if tapping on the piece)
         if (deltaTime < tapThreshold && absDeltaX < swipeThreshold && absDeltaY < swipeThreshold) {
-            rotate();
+            // Check if tap is on the current piece
+            if (currentPiece && isTapOnPiece(touch, canvas)) {
+                rotate();
+            }
         }
         // Swipe down for hard drop
         else if (absDeltaY > absDeltaX && deltaY > swipeThreshold) {
@@ -724,6 +727,36 @@ function setupCanvasTouchControls() {
             move(1);
         }
     }, { passive: false });
+}
+
+// Helper function to check if tap is on the current piece
+function isTapOnPiece(touch, canvas) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    // Convert touch coordinates to canvas coordinates
+    const canvasX = (touch.clientX - rect.left) * scaleX;
+    const canvasY = (touch.clientY - rect.top) * scaleY;
+    
+    // Convert to grid coordinates
+    const gridX = Math.floor(canvasX / BLOCK_SIZE);
+    const gridY = Math.floor(canvasY / BLOCK_SIZE);
+    
+    // Check if tap is within the bounds of the current piece
+    const shape = currentPiece.shape;
+    for (let row = 0; row < shape.length; row++) {
+        for (let col = 0; col < shape[row].length; col++) {
+            if (shape[row][col]) {
+                const pieceGridX = currentPiece.x + col;
+                const pieceGridY = currentPiece.y + row;
+                if (gridX === pieceGridX && gridY === pieceGridY) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 // Game Loop
