@@ -33,7 +33,7 @@ let lines = 0;
 let level = 1;
 let highScore = 0;
 let gameLoop = null;
-let dropInterval = 1000;
+let dropInterval = 600;
 let lastDropTime = 0;
 let isGameOver = false;
 let isPaused = false;
@@ -91,10 +91,8 @@ function init() {
     // Mobile touch controls
     setupMobileControls();
     
-    // Check if first time player
-    if (!localStorage.getItem('lineBreakerPlayed')) {
-        localStorage.setItem('lineBreakerPlayed', 'true');
-    }
+    // Show tutorial automatically on page load
+    showTutorial();
 }
 
 // Show Tutorial
@@ -128,9 +126,12 @@ function resetGame() {
     score = 0;
     lines = 0;
     level = 1;
-    dropInterval = 1000;
+    dropInterval = 600;
     isGameOver = false;
     updateScore();
+    
+    // Remove shake effect
+    document.querySelector('.game-container').classList.remove('danger');
 }
 
 // Toggle Pause
@@ -266,6 +267,8 @@ function hardDrop() {
 // Lock Piece to Grid
 function lockPiece() {
     const shape = currentPiece.shape;
+    let dangerZone = false;
+    
     for (let row = 0; row < shape.length; row++) {
         for (let col = 0; col < shape[row].length; col++) {
             if (shape[row][col]) {
@@ -273,9 +276,21 @@ function lockPiece() {
                 const gridX = currentPiece.x + col;
                 if (gridY >= 0) {
                     grid[gridY][gridX] = currentPiece.color;
+                    // Check if block is in danger zone (top 6 rows)
+                    if (gridY < 6) {
+                        dangerZone = true;
+                    }
                 }
             }
         }
+    }
+    
+    // Add shake effect if blocks are in danger zone
+    const container = document.querySelector('.game-container');
+    if (dangerZone) {
+        container.classList.add('danger');
+    } else {
+        container.classList.remove('danger');
     }
 }
 
@@ -322,12 +337,12 @@ function clearLines() {
         playSound('lineClear');
         lines += linesCleared;
         
-        // Level progression: every 10 lines = new level
-        const newLevel = Math.floor(lines / 10) + 1;
+        // Level progression: every 3 lines = new level
+        const newLevel = Math.floor(lines / 3) + 1;
         if (newLevel > level) {
             level = newLevel;
             // Speed increases with each level
-            dropInterval = Math.max(100, 1000 - (level * 80));
+            dropInterval = Math.max(100, 600 - (level * 100));
             // Visual feedback for level up
             createLevelUpEffect();
         }
@@ -752,6 +767,15 @@ function gameOver() {
     stopBackgroundMusic();
     cancelAnimationFrame(gameLoop);
     
+    // Remove shake effect
+    document.querySelector('.game-container').classList.remove('danger');
+    
+    // Remove shake effect
+    document.querySelector('.game-container').classList.remove('danger');
+    
+    // Remove shake effect
+    document.querySelector('.game-container').classList.remove('danger');
+    
     // Update high score if beaten
     if (score > highScore) {
         highScore = score;
@@ -771,4 +795,13 @@ function gameOver() {
 }
 
 // Initialize on page load
-window.addEventListener('load', init);
+window.addEventListener('load', () => {
+    // Lock screen orientation to portrait on mobile
+    if (screen.orientation && screen.orientation.lock) {
+        screen.orientation.lock('portrait').catch(err => {
+            console.log('Orientation lock not supported:', err);
+        });
+    }
+    
+    init();
+});

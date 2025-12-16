@@ -56,6 +56,16 @@ body {
     to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+.game-container.danger {
+    animation: shake 0.5s ease-in-out infinite;
+}
+
 h1 {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     -webkit-background-clip: text;
