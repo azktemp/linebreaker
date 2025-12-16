@@ -672,22 +672,6 @@ function updateParticles() {
 
 // Setup Mobile Controls
 function setupMobileControls() {
-    const leftBtn = document.getElementById('leftBtn');
-    const rightBtn = document.getElementById('rightBtn');
-    const downBtn = document.getElementById('downBtn');
-    const rotateBtn = document.getElementById('rotateBtn');
-    
-    if (leftBtn) leftBtn.addEventListener('touchstart', (e) => { e.preventDefault(); move(-1); });
-    if (rightBtn) rightBtn.addEventListener('touchstart', (e) => { e.preventDefault(); move(1); });
-    if (downBtn) downBtn.addEventListener('touchstart', (e) => { e.preventDefault(); hardDrop(); });
-    if (rotateBtn) rotateBtn.addEventListener('touchstart', (e) => { e.preventDefault(); rotate(); });
-    
-    // Also support click for desktop testing
-    if (leftBtn) leftBtn.addEventListener('click', () => move(-1));
-    if (rightBtn) rightBtn.addEventListener('click', () => move(1));
-    if (downBtn) downBtn.addEventListener('click', () => hardDrop());
-    if (rotateBtn) rotateBtn.addEventListener('click', () => rotate());
-    
     // Canvas touch/swipe controls
     setupCanvasTouchControls();
 }
