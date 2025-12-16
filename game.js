@@ -55,26 +55,6 @@ function setViewportHeight() {
     // Get actual viewport height (excluding browser chrome)
     const vh = window.innerHeight;
     document.documentElement.style.setProperty('--vh', `${vh * 0.01}px`);
-    
-    // Calculate available height for game container
-    const gameContainer = document.querySelector('.game-container');
-    const availableHeight = vh;
-    
-    // Game content height calculation:
-    // game-info: ~40px, high-score: ~30px, canvas: 540px, controls: ~80px, padding: ~20px
-    const minRequiredHeight = 710;
-    
-    if (availableHeight < minRequiredHeight) {
-        // Scale down to fit
-        const scale = Math.min(0.95, availableHeight / minRequiredHeight);
-        gameContainer.style.transform = `scale(${scale})`;
-        gameContainer.style.transformOrigin = 'top center';
-        document.body.style.paddingTop = '10px';
-        document.body.style.paddingBottom = '10px';
-    } else {
-        gameContainer.style.transform = 'scale(1)';
-        gameContainer.style.transformOrigin = 'center';
-    }
 }
 
 // Initialize Game
