@@ -148,10 +148,12 @@ function togglePause() {
     isPaused = !isPaused;
     if (isPaused) {
         document.getElementById('pauseScreen').classList.remove('hidden');
-        document.getElementById('pauseBtn').textContent = '▶ Resume';
+        document.getElementById('pauseBtn').textContent = '▶';
+        document.getElementById('pauseBtn').title = 'Resume';
     } else {
         document.getElementById('pauseScreen').classList.add('hidden');
-        document.getElementById('pauseBtn').textContent = '⏸ Pause';
+        document.getElementById('pauseBtn').textContent = '⏸';
+        document.getElementById('pauseBtn').title = 'Pause';
         lastDropTime = performance.now();
     }
 }
