@@ -89,6 +89,7 @@ h1 {
     border-radius: 8px;
     position: relative;
     box-shadow: 0 4px 15px rgba(79, 172, 254, 0.6), inset 0 1px 3px rgba(255, 255, 255, 0.3);
+    width: 100%;
 }
 
 .info-item {
@@ -380,6 +381,8 @@ h1 {
     margin-bottom: 5px;
     box-shadow: 0 4px 10px rgba(250, 112, 154, 0.5);
     text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+    width: 100%;
+    text-align: center;
 }
 
 /* Pause Button */
