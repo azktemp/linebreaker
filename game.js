@@ -687,6 +687,59 @@ function setupMobileControls() {
     if (rightBtn) rightBtn.addEventListener('click', () => move(1));
     if (downBtn) downBtn.addEventListener('click', () => hardDrop());
     if (rotateBtn) rotateBtn.addEventListener('click', () => rotate());
+    
+    // Canvas touch/swipe controls
+    setupCanvasTouchControls();
+}
+
+function setupCanvasTouchControls() {
+    const canvas = document.getElementById('gameCanvas');
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchStartTime = 0;
+    const swipeThreshold = 30; // Minimum distance for swipe
+    const tapThreshold = 200; // Maximum time for tap (ms)
+    
+    canvas.addEventListener('touchstart', (e) => {
+        if (isPaused || gameOver) return;
+        e.preventDefault();
+        const touch = e.touches[0];
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+        touchStartTime = Date.now();
+    }, { passive: false });
+    
+    canvas.addEventListener('touchend', (e) => {
+        if (isPaused || gameOver) return;
+        e.preventDefault();
+        const touch = e.changedTouches[0];
+        const touchEndX = touch.clientX;
+        const touchEndY = touch.clientY;
+        const touchEndTime = Date.now();
+        
+        const deltaX = touchEndX - touchStartX;
+        const deltaY = touchEndY - touchStartY;
+        const deltaTime = touchEndTime - touchStartTime;
+        const absDeltaX = Math.abs(deltaX);
+        const absDeltaY = Math.abs(deltaY);
+        
+        // Tap to rotate (quick touch without much movement)
+        if (deltaTime < tapThreshold && absDeltaX < swipeThreshold && absDeltaY < swipeThreshold) {
+            rotate();
+        }
+        // Swipe down for hard drop
+        else if (absDeltaY > absDeltaX && deltaY > swipeThreshold) {
+            hardDrop();
+        }
+        // Swipe left
+        else if (absDeltaX > absDeltaY && deltaX < -swipeThreshold) {
+            move(-1);
+        }
+        // Swipe right
+        else if (absDeltaX > absDeltaY && deltaX > swipeThreshold) {
+            move(1);
+        }
+    }, { passive: false });
 }
 
 // Game Loop
