@@ -24,7 +24,7 @@ const SHAPES = [
 ];
 
 // Game State
-let canvas, ctx, nextCanvas, nextCtx;
+let canvas, ctx;
 let grid = [];
 let currentPiece = null;
 let nextPiece = null;
@@ -54,8 +54,6 @@ let particles = [];
 function init() {
     canvas = document.getElementById('gameCanvas');
     ctx = canvas.getContext('2d');
-    nextCanvas = document.getElementById('nextShapeCanvas');
-    nextCtx = nextCanvas.getContext('2d');
     particleCanvas = document.getElementById('particleCanvas');
     particleCtx = particleCanvas.getContext('2d');
     
@@ -79,7 +77,6 @@ function init() {
     }
     
     // Event Listeners
-    document.getElementById('startBtn').addEventListener('click', showTutorial);
     document.getElementById('restartBtn').addEventListener('click', restartGame);
     document.getElementById('pauseBtn').addEventListener('click', togglePause);
     document.getElementById('resumeBtn').addEventListener('click', togglePause);
@@ -97,7 +94,6 @@ function init() {
 
 // Show Tutorial
 function showTutorial() {
-    document.getElementById('startBtn').style.display = 'none';
     document.getElementById('tutorial').classList.remove('hidden');
 }
 
@@ -105,7 +101,6 @@ function showTutorial() {
 function startGame() {
     document.getElementById('tutorial').classList.add('hidden');
     resetGame();
-    document.getElementById('startBtn').style.display = 'none';
     document.getElementById('pauseBtn').classList.remove('hidden');
     document.getElementById('gameOver').classList.add('hidden');
     nextPiece = createPiece();
@@ -172,8 +167,6 @@ function spawnPiece() {
     if (collision(currentPiece.x, currentPiece.y, currentPiece.shape)) {
         gameOver();
     }
-    
-    drawNextPiece();
 }
 
 // Collision Detection
@@ -643,20 +636,17 @@ function setupMobileControls() {
     const rightBtn = document.getElementById('rightBtn');
     const downBtn = document.getElementById('downBtn');
     const rotateBtn = document.getElementById('rotateBtn');
-    const hardDropBtn = document.getElementById('hardDropBtn');
     
     if (leftBtn) leftBtn.addEventListener('touchstart', (e) => { e.preventDefault(); move(-1); });
     if (rightBtn) rightBtn.addEventListener('touchstart', (e) => { e.preventDefault(); move(1); });
-    if (downBtn) downBtn.addEventListener('touchstart', (e) => { e.preventDefault(); drop(); });
+    if (downBtn) downBtn.addEventListener('touchstart', (e) => { e.preventDefault(); hardDrop(); });
     if (rotateBtn) rotateBtn.addEventListener('touchstart', (e) => { e.preventDefault(); rotate(); });
-    if (hardDropBtn) hardDropBtn.addEventListener('touchstart', (e) => { e.preventDefault(); hardDrop(); });
     
     // Also support click for desktop testing
     if (leftBtn) leftBtn.addEventListener('click', () => move(-1));
     if (rightBtn) rightBtn.addEventListener('click', () => move(1));
-    if (downBtn) downBtn.addEventListener('click', () => drop());
+    if (downBtn) downBtn.addEventListener('click', () => hardDrop());
     if (rotateBtn) rotateBtn.addEventListener('click', () => rotate());
-    if (hardDropBtn) hardDropBtn.addEventListener('click', () => hardDrop());
 }
 
 // Game Loop
@@ -744,22 +734,6 @@ function drawPiece(piece, context) {
     }
 }
 
-// Draw Next Piece
-function drawNextPiece() {
-    nextCtx.fillStyle = '#1a1a2e';
-    nextCtx.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
-    
-    if (nextPiece) {
-        const tempPiece = {
-            shape: nextPiece.shape,
-            color: nextPiece.color,
-            x: 1,
-            y: 1
-        };
-        drawPiece(tempPiece, nextCtx);
-    }
-}
-
 // Game Over
 function gameOver() {
     isGameOver = true;
@@ -791,7 +765,6 @@ function gameOver() {
     document.getElementById('finalHighScore').textContent = highScore;
     document.getElementById('gameOver').classList.remove('hidden');
     document.getElementById('pauseBtn').classList.add('hidden');
-    document.getElementById('startBtn').style.display = 'block';
 }
 
 // Initialize on page load
