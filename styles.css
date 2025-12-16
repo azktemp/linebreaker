@@ -6,7 +6,7 @@
 
 body {
     font-family: 'Arial', sans-serif;
-    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 50%, #7e22ce 100%);
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
     background-size: 200% 200%;
     animation: gradientShift 10s ease infinite;
     display: flex;
@@ -30,16 +30,16 @@ body {
 }
 
 .game-container {
-    background: rgba(255, 255, 255, 0.95);
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
     backdrop-filter: blur(10px);
     border: 2px solid rgba(255, 255, 255, 0.3);
     border-radius: 10px;
-    padding: 1px;
-    box-shadow: 0 25px 70px rgba(0, 0, 0, 0.4), 0 0 30px rgba(102, 126, 234, 0.3);
+    padding: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     text-align: center;
     max-width: 100%;
     width: 100%;
-    animation: fadeIn 0.5s ease-in, floatContainer 3s ease-in-out infinite;
+    animation: fadeIn 0.5s ease-in;
     overflow-y: auto;
     overflow-x: hidden;
     max-height: 100vh;
@@ -74,10 +74,10 @@ h1 {
 .game-info {
     display: flex;
     justify-content: space-around;
-    margin-bottom: 1px;
+    margin-bottom: 5px;
     background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-    padding: 2px;
-    border-radius: 6px;
+    padding: 6px;
+    border-radius: 8px;
     position: relative;
     box-shadow: 0 4px 15px rgba(79, 172, 254, 0.6), inset 0 1px 3px rgba(255, 255, 255, 0.3);
 }
@@ -156,10 +156,10 @@ h1 {
 
 .canvas-wrapper {
     display: flex;
-    gap: 3px;
+    gap: 8px;
     justify-content: center;
     align-items: flex-start;
-    margin-bottom: 1px;
+    margin-bottom: 5px;
 }
 
 .canvas-container {
@@ -206,14 +206,14 @@ h1 {
 .mobile-controls {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    margin-bottom: 1px;
+    gap: 5px;
+    margin-bottom: 5px;
 }
 
 .control-row {
     display: flex;
     justify-content: center;
-    gap: 3px;
+    gap: 5px;
 }
 
 .control-btn {
@@ -373,11 +373,11 @@ h1 {
 .high-score-display {
     background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
     color: #333;
-    padding: 2px 6px;
-    border-radius: 12px;
+    padding: 4px 10px;
+    border-radius: 15px;
     font-size: 0.9em;
     font-weight: bold;
-    margin-bottom: 1px;
+    margin-bottom: 5px;
     box-shadow: 0 4px 10px rgba(250, 112, 154, 0.5);
     text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
 }
