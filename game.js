@@ -9,7 +9,9 @@ const COLORS = [
     '#FF5F00', // Neon Orange
     '#8B00FF', // Neon Purple
     '#00FF9F', // Neon Mint
-    '#FF1744'  // Neon Red
+    '#FF1744', // Neon Red
+    '#FFD700', // Neon Gold
+    '#00FFFF'  // Neon Aqua
 ];
 
 // Tetromino Shapes
@@ -20,7 +22,9 @@ const SHAPES = [
     [[1, 1, 0], [0, 1, 1]], // S
     [[0, 1, 1], [1, 1, 0]], // Z
     [[1, 0, 0], [1, 1, 1]], // L
-    [[0, 0, 1], [1, 1, 1]]  // J
+    [[0, 0, 1], [1, 1, 1]], // J
+    [[1]], // Single dot
+    [[1, 1]] // Double dot (horizontal)
 ];
 
 // Game State
@@ -33,7 +37,7 @@ let lines = 0;
 let level = 1;
 let highScore = 0;
 let gameLoop = null;
-let dropInterval = 600;
+let dropInterval = 700;
 let lastDropTime = 0;
 let isGameOver = false;
 let isPaused = false;
@@ -135,7 +139,7 @@ function resetGame() {
     score = 0;
     lines = 0;
     level = 1;
-    dropInterval = 600;
+    dropInterval = 700;
     isGameOver = false;
     updateScore();
     
@@ -150,11 +154,13 @@ function togglePause() {
         document.getElementById('pauseScreen').classList.remove('hidden');
         document.getElementById('pauseBtn').textContent = '▶';
         document.getElementById('pauseBtn').title = 'Resume';
+        stopBackgroundMusic();
     } else {
         document.getElementById('pauseScreen').classList.add('hidden');
         document.getElementById('pauseBtn').textContent = '⏸';
         document.getElementById('pauseBtn').title = 'Pause';
         lastDropTime = performance.now();
+        if (musicEnabled) startBackgroundMusic();
     }
 }
 
@@ -285,8 +291,8 @@ function lockPiece() {
                 const gridX = currentPiece.x + col;
                 if (gridY >= 0) {
                     grid[gridY][gridX] = currentPiece.color;
-                    // Check if block is in danger zone (top 6 rows)
-                    if (gridY < 6) {
+                    // Check if block is in danger zone (top 3 rows)
+                    if (gridY < 3) {
                         dangerZone = true;
                     }
                 }
@@ -351,7 +357,7 @@ function clearLines() {
         if (newLevel > level) {
             level = newLevel;
             // Speed increases with each level
-            dropInterval = Math.max(100, 600 - (level * 100));
+            dropInterval = Math.max(100, 700 - (level * 50));
             // Visual feedback for level up
             createLevelUpEffect();
         }
@@ -384,14 +390,31 @@ function dropColumn(col) {
 
 // Level Up Effect
 function createLevelUpEffect() {
-    // Create particles across the screen
-    for (let i = 0; i < 30; i++) {
+    // Create more particles with rainbow colors
+    for (let i = 0; i < 50; i++) {
         const randomX = Math.floor(Math.random() * COLS);
         const randomY = Math.floor(Math.random() * ROWS);
-        createParticles(randomX, randomY, 2, '#FFD700');
+        const colors = ['#FF006E', '#00F5FF', '#FBFF00', '#FF5F00', '#8B00FF', '#00FF9F', '#FFD700'];
+        const randomColor = colors[Math.floor(Math.random() * colors.length)];
+        createParticles(randomX, randomY, 3, randomColor);
     }
     
-    // Play celebratory sound
+    // Flash effect on level display
+    const levelEl = document.getElementById('level');
+    levelEl.style.transform = 'scale(1.5)';
+    levelEl.style.transition = 'transform 0.3s ease';
+    setTimeout(() => {
+        levelEl.style.transform = 'scale(1)';
+    }, 300);
+    
+    // Add screen flash effect
+    const gameContainer = document.querySelector('.game-container');
+    gameContainer.style.animation = 'levelUpFlash 0.5s ease';
+    setTimeout(() => {
+        gameContainer.style.animation = '';
+    }, 500);
+    
+    // Play celebratory sound with more notes
     if (soundEnabled && audioContext) {
         const oscillator = audioContext.createOscillator();
         const gainNode = audioContext.createGain();
@@ -399,15 +422,16 @@ function createLevelUpEffect() {
         gainNode.connect(audioContext.destination);
         
         const now = audioContext.currentTime;
-        oscillator.type = 'sine';
+        oscillator.type = 'triangle';
         oscillator.frequency.setValueAtTime(523, now);
         oscillator.frequency.setValueAtTime(659, now + 0.1);
         oscillator.frequency.setValueAtTime(784, now + 0.2);
         oscillator.frequency.setValueAtTime(1047, now + 0.3);
-        gainNode.gain.setValueAtTime(0.3, now);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+        oscillator.frequency.setValueAtTime(1319, now + 0.4);
+        gainNode.gain.setValueAtTime(0.4, now);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
         oscillator.start(now);
-        oscillator.stop(now + 0.5);
+        oscillator.stop(now + 0.6);
     }
 }
 

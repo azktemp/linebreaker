@@ -72,6 +72,17 @@ body {
     20%, 40%, 60%, 80% { transform: translateX(5px); }
 }
 
+@keyframes levelUpFlash {
+    0%, 100% { 
+        filter: brightness(1);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    50% { 
+        filter: brightness(1.3);
+        box-shadow: 0 0 40px rgba(255, 215, 0, 0.8), 0 0 80px rgba(255, 215, 0, 0.5);
+    }
+}
+
 .game-container.danger {
     animation: shake 0.5s ease-in-out infinite;
 }
