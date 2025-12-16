@@ -1,7 +1,7 @@
 // Game Configuration
 const COLS = 10;
 const ROWS = 18; // Slightly shorter for better mobile fit
-const BLOCK_SIZE = 28;
+const BLOCK_SIZE = 30;
 const COLORS = [
     '#FF006E', // Neon Pink
     '#00F5FF', // Neon Cyan
