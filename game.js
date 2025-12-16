@@ -752,6 +752,9 @@ function draw() {
     // Draw grid
     drawGrid();
     
+    // Draw warning line
+    drawWarningLine();
+    
     // Draw current piece
     if (currentPiece) {
         drawPiece(currentPiece, ctx);
@@ -788,6 +791,56 @@ function drawGrid() {
         ctx.lineTo(col * BLOCK_SIZE, ROWS * BLOCK_SIZE);
         ctx.stroke();
     }
+}
+
+// Draw Warning Line
+function drawWarningLine() {
+    const warningRow = 6; // 3 rows before danger zone (which starts at row 3)
+    const warningY = warningRow * BLOCK_SIZE;
+    
+    // Find highest block position
+    let highestBlock = ROWS;
+    for (let row = 0; row < ROWS; row++) {
+        for (let col = 0; col < COLS; col++) {
+            if (grid[row][col]) {
+                highestBlock = Math.min(highestBlock, row);
+                break;
+            }
+        }
+        if (highestBlock < ROWS) break;
+    }
+    
+    // Determine line color and animation based on block height
+    let lineColor, lineWidth, shouldPulse;
+    
+    if (highestBlock <= 4) {
+        // Red + pulsing (blocks at row 4 or higher - critical warning)
+        const pulseIntensity = Math.sin(Date.now() / 150) * 0.3 + 0.7;
+        lineColor = `rgba(255, 0, 0, ${pulseIntensity})`;
+        lineWidth = 3 + Math.sin(Date.now() / 150) * 1;
+        shouldPulse = true;
+    } else if (highestBlock <= 5) {
+        // Yellow (blocks at row 5 - caution)
+        lineColor = 'rgba(255, 200, 0, 0.8)';
+        lineWidth = 3;
+        shouldPulse = false;
+    } else {
+        // Green (safe zone)
+        lineColor = 'rgba(0, 255, 100, 0.6)';
+        lineWidth = 2;
+        shouldPulse = false;
+    }
+    
+    // Draw the warning line
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = lineWidth;
+    ctx.setLineDash([5, 3]); // Dashed line
+    ctx.beginPath();
+    ctx.moveTo(0, warningY);
+    ctx.lineTo(COLS * BLOCK_SIZE, warningY);
+    ctx.stroke();
+    ctx.setLineDash([]); // Reset to solid line
+    ctx.lineWidth = 1;
 }
 
 // Draw Piece
