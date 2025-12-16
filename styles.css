@@ -85,6 +85,14 @@ h1 {
 .info-item {
     display: flex;
     flex-direction: column;
+    flex: 1;
+}
+
+.info-item.audio-controls {
+    flex-direction: row;
+    gap: 5px;
+    justify-content: center;
+    align-items: center;
 }
 
 .info-item:nth-child(3) {
@@ -116,28 +124,21 @@ h1 {
 }
 
 .sound-toggle, .music-toggle {
-    position: absolute;
-    width: 45px;
-    height: 45px;
+    position: relative;
+    width: 35px;
+    height: 35px;
     border-radius: 50%;
-    border: 3px solid #667eea;
+    border: 2px solid #667eea;
     background: white;
-    font-size: 1.3em;
+    font-size: 1.1em;
     cursor: pointer;
     transition: transform 0.2s, box-shadow 0.2s;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
     z-index: 10;
     display: block;
 }
 
-.sound-toggle {
-    top: 10px;
-    right: 10px;
-}
-
 .music-toggle {
-    top: 10px;
-    right: 65px;
     border-color: #764ba2;
 }
 
