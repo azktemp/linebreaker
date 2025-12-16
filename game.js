@@ -142,7 +142,7 @@ function togglePause() {
     } else {
         document.getElementById('pauseScreen').classList.add('hidden');
         document.getElementById('pauseBtn').textContent = '⏸ Pause';
-        lastDropTime = Date.now();
+        lastDropTime = performance.now();
     }
 }
 
