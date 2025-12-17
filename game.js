@@ -681,20 +681,57 @@ function setupCanvasTouchControls() {
     let touchStartX = 0;
     let touchStartY = 0;
     let touchStartTime = 0;
+    let lastMoveX = 0;
+    let isDragging = false;
     const swipeThreshold = 30; // Minimum distance for swipe
     const tapThreshold = 200; // Maximum time for tap (ms)
+    const dragThreshold = 15; // Minimum distance to start dragging
     
     canvas.addEventListener('touchstart', (e) => {
-        if (isPaused) return;
+        if (isPaused || !currentPiece) return;
         e.preventDefault();
         const touch = e.touches[0];
         touchStartX = touch.clientX;
         touchStartY = touch.clientY;
+        lastMoveX = touch.clientX;
         touchStartTime = Date.now();
+        isDragging = false;
+    }, { passive: false });
+    
+    canvas.addEventListener('touchmove', (e) => {
+        if (isPaused || !currentPiece) return;
+        e.preventDefault();
+        const touch = e.touches[0];
+        const currentX = touch.clientX;
+        const currentY = touch.clientY;
+        
+        const deltaX = currentX - touchStartX;
+        const deltaY = currentY - touchStartY;
+        const absDeltaX = Math.abs(deltaX);
+        const absDeltaY = Math.abs(deltaY);
+        
+        // Start dragging if moved enough horizontally
+        if (!isDragging && absDeltaX > dragThreshold && absDeltaX > absDeltaY) {
+            isDragging = true;
+        }
+        
+        // Handle horizontal dragging
+        if (isDragging) {
+            const rect = canvas.getBoundingClientRect();
+            const blockWidth = rect.width / COLS;
+            const moveDistance = currentX - lastMoveX;
+            
+            // Move piece if dragged more than half a block width
+            if (Math.abs(moveDistance) >= blockWidth) {
+                const direction = moveDistance > 0 ? 1 : -1;
+                move(direction);
+                lastMoveX = currentX;
+            }
+        }
     }, { passive: false });
     
     canvas.addEventListener('touchend', (e) => {
-        if (isPaused) return;
+        if (isPaused || !currentPiece) return;
         e.preventDefault();
         const touch = e.changedTouches[0];
         const touchEndX = touch.clientX;
@@ -707,6 +744,12 @@ function setupCanvasTouchControls() {
         const absDeltaX = Math.abs(deltaX);
         const absDeltaY = Math.abs(deltaY);
         
+        // If was dragging, don't process as swipe/tap
+        if (isDragging) {
+            isDragging = false;
+            return;
+        }
+        
         // Tap to rotate (quick touch without much movement)
         if (deltaTime < tapThreshold && absDeltaX < swipeThreshold && absDeltaY < swipeThreshold) {
             rotate();
@@ -715,14 +758,26 @@ function setupCanvasTouchControls() {
         else if (absDeltaY > absDeltaX && deltaY > swipeThreshold) {
             hardDrop();
         }
-        // Swipe left
+        // Swipe left - multi-column based on distance
         else if (absDeltaX > absDeltaY && deltaX < -swipeThreshold) {
-            move(-1);
+            const rect = canvas.getBoundingClientRect();
+            const blockWidth = rect.width / COLS;
+            const columns = Math.max(1, Math.floor(absDeltaX / blockWidth));
+            for (let i = 0; i < columns; i++) {
+                move(-1);
+            }
         }
-        // Swipe right
+        // Swipe right - multi-column based on distance
         else if (absDeltaX > absDeltaY && deltaX > swipeThreshold) {
-            move(1);
+            const rect = canvas.getBoundingClientRect();
+            const blockWidth = rect.width / COLS;
+            const columns = Math.max(1, Math.floor(absDeltaX / blockWidth));
+            for (let i = 0; i < columns; i++) {
+                move(1);
+            }
         }
+        
+        isDragging = false;
     }, { passive: false });
 }
 
