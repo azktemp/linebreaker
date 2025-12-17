@@ -11,7 +11,10 @@ const COLORS = [
     '#00FF9F', // Neon Mint
     '#FF1744', // Neon Red
     '#FFD700', // Neon Gold
-    '#00FFFF'  // Neon Aqua
+    '#00FFFF', // Neon Aqua
+    '#FF10F0', // Neon Magenta (for small L)
+    '#39FF14', // Neon Lime (for triple horizontal)
+    '#FF007F'  // Neon Rose (for reverse L)
 ];
 
 // Tetromino Shapes
@@ -24,7 +27,10 @@ const SHAPES = [
     [[1, 0, 0], [1, 1, 1]], // L
     [[0, 0, 1], [1, 1, 1]], // J
     [[1]], // Single dot
-    [[1, 1]] // Double dot (horizontal)
+    [[1, 1]], // Double dot (horizontal)
+    [[1, 0], [1, 1]], // Small L (3 dots)
+    [[1, 1, 1]], // Triple horizontal
+    [[0, 1], [1, 1]] // Small reverse L (3 dots)
 ];
 
 // Game State
@@ -826,12 +832,32 @@ function drawGrid() {
     for (let row = 0; row < ROWS; row++) {
         for (let col = 0; col < COLS; col++) {
             if (grid[row][col]) {
-                ctx.fillStyle = grid[row][col];
-                ctx.fillRect(col * BLOCK_SIZE, row * BLOCK_SIZE, BLOCK_SIZE - 1, BLOCK_SIZE - 1);
+                const x = col * BLOCK_SIZE;
+                const y = row * BLOCK_SIZE;
+                const color = grid[row][col];
                 
-                // Add shine effect
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
-                ctx.fillRect(col * BLOCK_SIZE, row * BLOCK_SIZE, BLOCK_SIZE - 1, 3);
+                // Create gradient for 3D effect
+                const gradient = ctx.createLinearGradient(x, y, x + BLOCK_SIZE, y + BLOCK_SIZE);
+                gradient.addColorStop(0, color);
+                gradient.addColorStop(1, shadeColor(color, -30));
+                ctx.fillStyle = gradient;
+                ctx.fillRect(x, y, BLOCK_SIZE - 1, BLOCK_SIZE - 1);
+                
+                // Add top shine
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.fillRect(x, y, BLOCK_SIZE - 1, 4);
+                
+                // Add left shine
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.fillRect(x, y, 4, BLOCK_SIZE - 1);
+                
+                // Add bottom shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                ctx.fillRect(x, y + BLOCK_SIZE - 4, BLOCK_SIZE - 1, 3);
+                
+                // Add right shadow
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                ctx.fillRect(x + BLOCK_SIZE - 4, y, 3, BLOCK_SIZE - 1);
             }
         }
     }
@@ -942,22 +968,52 @@ function drawGhostPiece() {
 // Draw Piece
 function drawPiece(piece, context) {
     const shape = piece.shape;
-    context.fillStyle = piece.color;
+    const color = piece.color;
     
     for (let row = 0; row < shape.length; row++) {
         for (let col = 0; col < shape[row].length; col++) {
             if (shape[row][col]) {
                 const x = (piece.x + col) * BLOCK_SIZE;
                 const y = (piece.y + row) * BLOCK_SIZE;
+                
+                // Create gradient for 3D effect
+                const gradient = context.createLinearGradient(x, y, x + BLOCK_SIZE, y + BLOCK_SIZE);
+                gradient.addColorStop(0, color);
+                gradient.addColorStop(1, shadeColor(color, -30));
+                context.fillStyle = gradient;
                 context.fillRect(x, y, BLOCK_SIZE - 1, BLOCK_SIZE - 1);
                 
-                // Add shine effect
+                // Add top shine
+                context.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                context.fillRect(x, y, BLOCK_SIZE - 1, 4);
+                
+                // Add left shine
                 context.fillStyle = 'rgba(255, 255, 255, 0.3)';
-                context.fillRect(x, y, BLOCK_SIZE - 1, 3);
-                context.fillStyle = piece.color;
+                context.fillRect(x, y, 4, BLOCK_SIZE - 1);
+                
+                // Add bottom shadow
+                context.fillStyle = 'rgba(0, 0, 0, 0.4)';
+                context.fillRect(x, y + BLOCK_SIZE - 4, BLOCK_SIZE - 1, 3);
+                
+                // Add right shadow
+                context.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                context.fillRect(x + BLOCK_SIZE - 4, y, 3, BLOCK_SIZE - 1);
             }
         }
     }
+}
+
+// Helper function to darken/lighten colors
+function shadeColor(color, percent) {
+    const num = parseInt(color.replace('#', ''), 16);
+    const amt = Math.round(2.55 * percent);
+    const R = (num >> 16) + amt;
+    const G = (num >> 8 & 0x00FF) + amt;
+    const B = (num & 0x0000FF) + amt;
+    return '#' + (0x1000000 + (R < 255 ? R < 1 ? 0 : R : 255) * 0x10000 +
+        (G < 255 ? G < 1 ? 0 : G : 255) * 0x100 +
+        (B < 255 ? B < 1 ? 0 : B : 255))
+        .toString(16).slice(1);
 }
 
 // Game Over
