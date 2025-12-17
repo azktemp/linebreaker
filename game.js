@@ -810,6 +810,11 @@ function draw() {
     // Draw warning line
     drawWarningLine();
     
+    // Draw ghost piece (where piece will land)
+    if (currentPiece) {
+        drawGhostPiece();
+    }
+    
     // Draw current piece
     if (currentPiece) {
         drawPiece(currentPiece, ctx);
@@ -896,6 +901,42 @@ function drawWarningLine() {
     ctx.stroke();
     ctx.setLineDash([]); // Reset to solid line
     ctx.lineWidth = 1;
+}
+
+// Draw Ghost Piece (shows where piece will land)
+function drawGhostPiece() {
+    if (!currentPiece) return;
+    
+    // Calculate ghost position (where piece will land)
+    let ghostY = currentPiece.y;
+    while (!collision(currentPiece.x, ghostY + 1, currentPiece.shape)) {
+        ghostY++;
+    }
+    
+    // Only draw ghost if it's below the current piece
+    if (ghostY > currentPiece.y) {
+        const shape = currentPiece.shape;
+        
+        // Draw ghost piece with semi-transparent outline
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([4, 4]); // Dashed outline
+        
+        for (let row = 0; row < shape.length; row++) {
+            for (let col = 0; col < shape[row].length; col++) {
+                if (shape[row][col]) {
+                    const x = (currentPiece.x + col) * BLOCK_SIZE;
+                    const y = (ghostY + row) * BLOCK_SIZE;
+                    
+                    // Draw dashed outline
+                    ctx.strokeRect(x + 1, y + 1, BLOCK_SIZE - 3, BLOCK_SIZE - 3);
+                }
+            }
+        }
+        
+        ctx.setLineDash([]); // Reset to solid line
+        ctx.lineWidth = 1;
+    }
 }
 
 // Draw Piece
