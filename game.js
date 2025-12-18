@@ -118,15 +118,6 @@ function init() {
     document.getElementById('closeTutorial').addEventListener('click', startGame);
     document.addEventListener('keydown', handleKeyPress);
     
-    // Add canvas click handler for restart on game over
-    canvas.addEventListener('click', (e) => {
-        console.log('Canvas clicked! isGameOver:', isGameOver, 'progress:', gameOverAnimation.progress);
-        if (isGameOver && gameOverAnimation.progress >= 1) {
-            console.log('Restarting game...');
-            restartGame();
-            return;
-        }
-    }, true); // Use capture phase to ensure it fires
     document.getElementById('soundToggle').addEventListener('click', toggleSound);
     document.getElementById('musicToggle').addEventListener('click', toggleMusic);
     
@@ -673,10 +664,8 @@ function updateScore() {
 function handleKeyPress(e) {
     // Allow restart when game over animation is complete (progress = 1)
     if (isGameOver && gameOverAnimation.progress >= 1) {
-        console.log('Key pressed during game over:', e.key, 'progress:', gameOverAnimation.progress);
         if (e.key === ' ' || e.key === 'Enter') {
             e.preventDefault();
-            console.log('Restarting game via keyboard...');
             restartGame();
             return;
         }
@@ -997,13 +986,6 @@ function setupCanvasTouchControls() {
         const touchEndY = touch.clientY;
         const touchEndTime = Date.now();
         
-        // Allow restart on tap when game over animation is complete
-        if (isGameOver && gameOverAnimation.progress >= 1) {
-            console.log('Tap detected on game over screen, restarting...');
-            restartGame();
-            return;
-        }
-        
         if (isPaused || !currentPiece) return;
         
         const deltaX = touchEndX - touchStartX;
@@ -1136,66 +1118,6 @@ function drawGameOverAnimation() {
         gradient.addColorStop(1, '#FF9500');
         ctx.fillStyle = gradient;
         ctx.fillText('GAME OVER', canvas.width / 2, gameOverAnimation.textY);
-    }
-    
-    // Draw stats below text
-    if (gameOverAnimation.statsAlpha > 0) {
-        ctx.globalAlpha = gameOverAnimation.statsAlpha;
-        
-        const statsStartY = gameOverAnimation.textY + 70;
-        const statSpacing = 55;
-        
-        // Draw stats with better styling
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        
-        // Score
-        ctx.font = 'bold 14px Arial';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.shadowBlur = 5;
-        ctx.shadowColor = '#00F5FF';
-        ctx.fillText('SCORE', canvas.width / 2, statsStartY);
-        
-        ctx.font = 'bold 26px Arial';
-        ctx.fillStyle = '#00F5FF';
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = '#00F5FF';
-        ctx.fillText(score, canvas.width / 2, statsStartY + 20);
-        
-        // Lines
-        ctx.font = 'bold 14px Arial';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.shadowBlur = 5;
-        ctx.shadowColor = '#FBFF00';
-        ctx.fillText('LINES', canvas.width / 2, statsStartY + statSpacing);
-        
-        ctx.font = 'bold 26px Arial';
-        ctx.fillStyle = '#FBFF00';
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = '#FBFF00';
-        ctx.fillText(lines, canvas.width / 2, statsStartY + statSpacing + 20);
-        
-        // Level
-        ctx.font = 'bold 14px Arial';
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.shadowBlur = 5;
-        ctx.shadowColor = '#FF10F0';
-        ctx.fillText('LEVEL', canvas.width / 2, statsStartY + statSpacing * 2);
-        
-        ctx.font = 'bold 26px Arial';
-        ctx.fillStyle = '#FF10F0';
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = '#FF10F0';
-        ctx.fillText(level, canvas.width / 2, statsStartY + statSpacing * 2 + 20);
-        
-        // Restart instruction with pulsing effect
-        const pulseAlpha = 0.5 + Math.sin(Date.now() / 300) * 0.5;
-        ctx.globalAlpha = gameOverAnimation.statsAlpha * pulseAlpha;
-        ctx.font = 'bold 18px Arial';
-        ctx.fillStyle = '#FFD700';
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = '#FFD700';
-        ctx.fillText('TAP TO RESTART', canvas.width / 2, statsStartY + statSpacing * 2 + 60);
     }
     
     ctx.restore();
@@ -1460,39 +1382,30 @@ function startGameOverAnimation() {
         const progress = Math.min(elapsed / duration, 1);
         gameOverAnimation.progress = progress;
         
-        // Wave fade from bottom to top (0 to 1 over first 40%)
-        if (progress < 0.4) {
-            gameOverAnimation.fadeWave = progress / 0.4;
+        // Wave fade from bottom to top (0 to 1 over first 60%)
+        if (progress < 0.6) {
+            gameOverAnimation.fadeWave = progress / 0.6;
         } else {
             gameOverAnimation.fadeWave = 1;
         }
         
-        // Text rises from bottom (starts at 30%, ends at 70%)
-        if (progress > 0.3 && progress < 0.7) {
-            const textProgress = (progress - 0.3) / 0.4;
+        // Text rises from bottom (starts at 20%, ends at 60%)
+        if (progress > 0.2 && progress < 0.6) {
+            const textProgress = (progress - 0.2) / 0.4;
             gameOverAnimation.textY = canvas.height - (textProgress * canvas.height * 0.6);
             gameOverAnimation.textAlpha = textProgress;
-        } else if (progress >= 0.7) {
+        } else if (progress >= 0.6) {
             gameOverAnimation.textY = canvas.height * 0.4;
             gameOverAnimation.textAlpha = 1;
         }
         
-        // Stats fade in (starts at 60%)
-        if (progress > 0.6) {
-            gameOverAnimation.statsAlpha = (progress - 0.6) / 0.4;
-        }
+        // Don't show stats on canvas, will use overlay instead
         
         if (progress < 1) {
             requestAnimationFrame(animate);
         } else {
-            // Animation complete, keep it on screen
-            console.log('Game over animation complete! Progress:', gameOverAnimation.progress);
-            // Don't call showGameOverScreen() - just update high score
-            if (score > highScore) {
-                highScore = score;
-                localStorage.setItem('lineBreakerHighScore', highScore);
-                document.getElementById('highScore').textContent = highScore;
-            }
+            // Animation complete, show the overlay
+            showGameOverScreen();
         }
     }
     
