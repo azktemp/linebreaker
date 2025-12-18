@@ -869,13 +869,39 @@ function playSound(type) {
             break;
             
         case 'gameOver':
-            oscillator.type = 'sawtooth';
-            oscillator.frequency.setValueAtTime(300, now);
-            oscillator.frequency.exponentialRampToValueAtTime(100, now + 0.5);
-            gainNode.gain.setValueAtTime(0.3, now);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
-            oscillator.start(now);
-            oscillator.stop(now + 0.5);
+            // Create a dramatic descending arpeggio with multiple tones
+            const frequencies = [523.25, 392, 293.66, 220]; // C5, G4, D4, A3
+            frequencies.forEach((freq, index) => {
+                const osc = audioContext.createOscillator();
+                const gain = audioContext.createGain();
+                
+                osc.connect(gain);
+                gain.connect(audioContext.destination);
+                
+                osc.type = 'sine';
+                const startTime = now + (index * 0.15);
+                osc.frequency.setValueAtTime(freq, startTime);
+                osc.frequency.exponentialRampToValueAtTime(freq * 0.5, startTime + 0.3);
+                
+                gain.gain.setValueAtTime(0.4, startTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, startTime + 0.3);
+                
+                osc.start(startTime);
+                osc.stop(startTime + 0.3);
+            });
+            
+            // Add a deep bass rumble for impact
+            const bass = audioContext.createOscillator();
+            const bassGain = audioContext.createGain();
+            bass.connect(bassGain);
+            bassGain.connect(audioContext.destination);
+            bass.type = 'triangle';
+            bass.frequency.setValueAtTime(55, now);
+            bassGain.gain.setValueAtTime(0.5, now);
+            bassGain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+            bass.start(now);
+            bass.stop(now + 0.8);
+            return; // Skip the default oscillator setup since we created custom ones
             break;
             
         case 'hardDrop':
@@ -1093,32 +1119,6 @@ function drawGameOverAnimation() {
     // Darken background gradually
     ctx.fillStyle = `rgba(0, 0, 0, ${gameOverAnimation.progress * 0.7})`;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw "GAME OVER" text rising from bottom
-    if (gameOverAnimation.textAlpha > 0) {
-        ctx.globalAlpha = gameOverAnimation.textAlpha;
-        
-        // Multi-layer text effect
-        ctx.shadowBlur = 25;
-        ctx.shadowColor = '#FF1744';
-        
-        ctx.font = 'bold 48px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        
-        // Red stroke
-        ctx.strokeStyle = '#FF1744';
-        ctx.lineWidth = 4;
-        ctx.strokeText('GAME OVER', canvas.width / 2, gameOverAnimation.textY);
-        
-        // White fill with gradient
-        const gradient = ctx.createLinearGradient(0, gameOverAnimation.textY - 30, 0, gameOverAnimation.textY + 30);
-        gradient.addColorStop(0, '#FFFFFF');
-        gradient.addColorStop(0.5, '#FFD700');
-        gradient.addColorStop(1, '#FF9500');
-        ctx.fillStyle = gradient;
-        ctx.fillText('GAME OVER', canvas.width / 2, gameOverAnimation.textY);
-    }
     
     ctx.restore();
 }
