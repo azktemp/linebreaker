@@ -121,6 +121,13 @@ function init() {
     document.getElementById('soundToggle').addEventListener('click', toggleSound);
     document.getElementById('musicToggle').addEventListener('click', toggleMusic);
     
+    // Auto-pause when page loses focus (tab switch, minimize, etc.)
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && !isPaused && !isGameOver) {
+            togglePause();
+        }
+    });
+    
     // Mobile touch controls
     setupMobileControls();
     
