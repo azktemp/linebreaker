@@ -66,10 +66,24 @@ body {
     to { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-    20%, 40%, 60%, 80% { transform: translateX(5px); }
+@keyframes dangerPulse {
+    0%, 100% { 
+        box-shadow: 0 0 20px rgba(255, 0, 0, 0.6), 0 0 40px rgba(255, 0, 0, 0.4), inset 0 0 20px rgba(255, 0, 0, 0.2);
+        border-color: rgba(255, 0, 0, 0.8);
+    }
+    50% { 
+        box-shadow: 0 0 40px rgba(255, 0, 0, 1), 0 0 80px rgba(255, 0, 0, 0.6), inset 0 0 30px rgba(255, 0, 0, 0.4);
+        border-color: rgba(255, 0, 0, 1);
+    }
+}
+
+@keyframes dangerFlash {
+    0%, 100% { 
+        background: linear-gradient(180deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+    }
+    50% { 
+        background: linear-gradient(180deg, #2a0a0a 0%, #4a1515 50%, #2a0a0a 100%);
+    }
 }
 
 @keyframes levelUpFlash {
@@ -83,8 +97,8 @@ body {
     }
 }
 
-.game-container.danger {
-    animation: shake 0.5s ease-in-out infinite;
+.canvas-container.danger #gameCanvas {
+    animation: dangerPulse 1s ease-in-out infinite, dangerFlash 1.5s ease-in-out infinite;
 }
 
 h1 {
@@ -224,17 +238,6 @@ h1 {
     border-radius: 12px;
     box-shadow: 0 8px 25px rgba(0, 242, 254, 0.5), inset 0 0 20px rgba(0, 0, 0, 0.5);
     display: block;
-}
-
-#particleCanvas {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    border-radius: 12px;
-    z-index: 2;
 }
 
 .bottom-controls {

@@ -47,6 +47,7 @@ let dropInterval = 700;
 let lastDropTime = 0;
 let isGameOver = false;
 let isPaused = false;
+let inDangerZone = false;
 
 // Audio
 let audioContext;
@@ -57,8 +58,20 @@ let bgMusicGain = null;
 let bgMusicInterval = null;
 
 // Particles
-let particleCanvas, particleCtx;
 let particles = [];
+
+// Level up animation
+let levelUpAnimation = null;
+
+// Game over animation
+let gameOverAnimation = {
+    active: false,
+    progress: 0,
+    fadeWave: 0,
+    textY: 0,
+    textAlpha: 0,
+    statsAlpha: 0
+};
 
 // Dynamic Viewport Height Management
 function setViewportHeight() {
@@ -71,8 +84,6 @@ function setViewportHeight() {
 function init() {
     canvas = document.getElementById('gameCanvas');
     ctx = canvas.getContext('2d');
-    particleCanvas = document.getElementById('particleCanvas');
-    particleCtx = particleCanvas.getContext('2d');
     
     // Set viewport height
     setViewportHeight();
@@ -106,6 +117,16 @@ function init() {
     document.getElementById('resumeBtn').addEventListener('click', togglePause);
     document.getElementById('closeTutorial').addEventListener('click', startGame);
     document.addEventListener('keydown', handleKeyPress);
+    
+    // Add canvas click handler for restart on game over
+    canvas.addEventListener('click', (e) => {
+        console.log('Canvas clicked! isGameOver:', isGameOver, 'progress:', gameOverAnimation.progress);
+        if (isGameOver && gameOverAnimation.progress >= 1) {
+            console.log('Restarting game...');
+            restartGame();
+            return;
+        }
+    }, true); // Use capture phase to ensure it fires
     document.getElementById('soundToggle').addEventListener('click', toggleSound);
     document.getElementById('musicToggle').addEventListener('click', toggleMusic);
     
@@ -147,10 +168,26 @@ function resetGame() {
     level = 1;
     dropInterval = 700;
     isGameOver = false;
+    inDangerZone = false;
+    
+    // Reset game over animation
+    gameOverAnimation.active = false;
+    gameOverAnimation.progress = 0;
+    gameOverAnimation.fadeWave = 0;
+    gameOverAnimation.textY = 0;
+    gameOverAnimation.textAlpha = 0;
+    gameOverAnimation.statsAlpha = 0;
+    
     updateScore();
     
-    // Remove shake effect
-    document.querySelector('.game-container').classList.remove('danger');
+    // Remove danger effect
+    gameOverAnimation.fadeWave = 0;
+    gameOverAnimation.textY = 0;
+    gameOverAnimation.textAlpha = 0;
+    gameOverAnimation.statsAlpha = 0;
+    
+    // Remove danger effect
+    document.querySelector('.canvas-container').classList.remove('danger');
 }
 
 // Toggle Pause
@@ -288,7 +325,6 @@ function hardDrop() {
 // Lock Piece to Grid
 function lockPiece() {
     const shape = currentPiece.shape;
-    let dangerZone = false;
     
     for (let row = 0; row < shape.length; row++) {
         for (let col = 0; col < shape[row].length; col++) {
@@ -297,39 +333,54 @@ function lockPiece() {
                 const gridX = currentPiece.x + col;
                 if (gridY >= 0) {
                     grid[gridY][gridX] = currentPiece.color;
-                    // Check if block is in danger zone (top 3 rows)
-                    if (gridY < 3) {
-                        dangerZone = true;
-                    }
                 }
             }
         }
     }
     
-    // Add shake effect if blocks are in danger zone
-    const container = document.querySelector('.game-container');
+    // Check if ANY blocks exist in danger zone (top 4 rows)
+    let dangerZone = false;
+    for (let row = 0; row < 4; row++) {
+        for (let col = 0; col < COLS; col++) {
+            if (grid[row][col]) {
+                dangerZone = true;
+                break;
+            }
+        }
+        if (dangerZone) break;
+    }
+    
+    // Add danger visual effect and switch music if blocks are in danger zone
+    const canvasContainer = document.querySelector('.canvas-container');
     if (dangerZone) {
-        container.classList.add('danger');
+        canvasContainer.classList.add('danger');
+        // Switch to danger music if not already playing
+        if (!inDangerZone && musicEnabled) {
+            inDangerZone = true;
+            stopBackgroundMusic();
+            startDangerMusic();
+        }
     } else {
-        container.classList.remove('danger');
+        canvasContainer.classList.remove('danger');
+        // Switch back to normal music if leaving danger zone
+        if (inDangerZone && musicEnabled) {
+            inDangerZone = false;
+            stopBackgroundMusic();
+            startBackgroundMusic();
+        }
     }
 }
 
 // Clear Completed Lines
 function clearLines() {
     let linesCleared = 0;
+    let rowsToClear = [];
+    let colsToClear = [];
     
     // Check rows
     for (let row = ROWS - 1; row >= 0; row--) {
         if (grid[row].every(cell => cell !== 0)) {
-            // Create particles for cleared line
-            for (let col = 0; col < COLS; col++) {
-                createParticles(col, row, 3, grid[row][col]);
-            }
-            grid.splice(row, 1);
-            grid.unshift(new Array(COLS).fill(0));
-            linesCleared++;
-            row++; // Check same row again
+            rowsToClear.push(row);
         }
     }
     
@@ -343,39 +394,93 @@ function clearLines() {
             }
         }
         if (columnFilled) {
-            // Create particles for cleared column
-            for (let row = 0; row < ROWS; row++) {
-                createParticles(col, row, 3, grid[row][col]);
-                grid[row][col] = 0;
-            }
-            // Drop blocks above
-            dropColumn(col);
-            linesCleared++;
+            colsToClear.push(col);
         }
     }
     
-    if (linesCleared > 0) {
-        playSound('lineClear');
-        lines += linesCleared;
-        
-        // Level progression: every 3 lines = new level
-        const newLevel = Math.floor(lines / 3) + 1;
-        if (newLevel > level) {
-            level = newLevel;
-            // Speed increases with each level
-            dropInterval = Math.max(100, 700 - (level * 50));
-            // Visual feedback for level up
-            createLevelUpEffect();
-        }
-        
-        // Score calculation: more points for multiple lines and higher levels
-        const baseScore = linesCleared === 1 ? 100 : 
-                         linesCleared === 2 ? 300 :
-                         linesCleared === 3 ? 500 : 800;
-        score += baseScore * level;
-        
-        updateScore();
+    // If there are lines to clear, flash them first
+    if (rowsToClear.length > 0 || colsToClear.length > 0) {
+        flashLines(rowsToClear, colsToClear, () => {
+            // Clear rows
+            for (let i = rowsToClear.length - 1; i >= 0; i--) {
+                const row = rowsToClear[i];
+                // Create particles for cleared line
+                for (let col = 0; col < COLS; col++) {
+                    createParticles(col, row, 6, grid[row][col]);
+                }
+                grid.splice(row, 1);
+                grid.unshift(new Array(COLS).fill(0));
+                linesCleared++;
+            }
+            
+            // Clear columns
+            for (let col of colsToClear) {
+                // Create particles for cleared column
+                for (let row = 0; row < ROWS; row++) {
+                    createParticles(col, row, 6, grid[row][col]);
+                    grid[row][col] = 0;
+                }
+                // Drop blocks above
+                dropColumn(col);
+                linesCleared++;
+            }
+            
+            playSound('lineClear');
+            lines += linesCleared;
+            
+            // Level progression: every 3 lines = new level
+            const newLevel = Math.floor(lines / 3) + 1;
+            if (newLevel > level) {
+                level = newLevel;
+                // Speed increases with each level
+                dropInterval = Math.max(100, 700 - (level * 50));
+            }
+            
+            // Score calculation: more points for multiple lines and higher levels
+            const baseScore = linesCleared === 1 ? 100 : 
+                             linesCleared === 2 ? 300 :
+                             linesCleared === 3 ? 500 : 800;
+            score += baseScore * level;
+            
+            // Update score/level display first
+            updateScore();
+            
+            // Then trigger visual feedback for level up
+            if (newLevel > (newLevel - 1)) {
+                // Check if we just leveled up in this clear
+                const previousLevel = Math.floor((lines - linesCleared) / 3) + 1;
+                if (newLevel > previousLevel) {
+                    createLevelUpEffect();
+                }
+            }
+        });
     }
+}
+
+// Flash lines before clearing them
+let flashingLines = { rows: [], cols: [], active: false, flashCount: 0 };
+
+function flashLines(rows, cols, callback) {
+    flashingLines.rows = rows;
+    flashingLines.cols = cols;
+    flashingLines.active = true;
+    flashingLines.flashCount = 0;
+    
+    const flashDuration = 300; // Total flash duration
+    const flashInterval = 75; // Flash every 75ms
+    const totalFlashes = 4;
+    
+    const flashTimer = setInterval(() => {
+        flashingLines.flashCount++;
+        
+        if (flashingLines.flashCount >= totalFlashes) {
+            clearInterval(flashTimer);
+            flashingLines.active = false;
+            flashingLines.rows = [];
+            flashingLines.cols = [];
+            callback();
+        }
+    }, flashInterval);
 }
 
 // Drop Column After Vertical Line Clear
@@ -396,13 +501,27 @@ function dropColumn(col) {
 
 // Level Up Effect
 function createLevelUpEffect() {
+    // Rainbow colors for particles
+    const colors = ['#FF006E', '#00F5FF', '#FBFF00', '#FF5F00', '#8B00FF', '#00FF9F', '#FFD700'];
+    
     // Create more particles with rainbow colors
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 80; i++) {
         const randomX = Math.floor(Math.random() * COLS);
         const randomY = Math.floor(Math.random() * ROWS);
-        const colors = ['#FF006E', '#00F5FF', '#FBFF00', '#FF5F00', '#8B00FF', '#00FF9F', '#FFD700'];
         const randomColor = colors[Math.floor(Math.random() * colors.length)];
         createParticles(randomX, randomY, 3, randomColor);
+    }
+    
+    // Create even more particles - 180 particles bursting from center
+    for (let i = 0; i < 180; i++) {
+        particles.push({
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            vx: (Math.random() - 0.5) * 12,
+            vy: (Math.random() - 0.5) * 12 - 4,
+            life: 1,
+            color: colors[Math.floor(Math.random() * colors.length)]
+        });
     }
     
     // Flash effect on level display
@@ -413,12 +532,8 @@ function createLevelUpEffect() {
         levelEl.style.transform = 'scale(1)';
     }, 300);
     
-    // Add screen flash effect
-    const gameContainer = document.querySelector('.game-container');
-    gameContainer.style.animation = 'levelUpFlash 0.5s ease';
-    setTimeout(() => {
-        gameContainer.style.animation = '';
-    }, 500);
+    // Show "LEVEL UP!" animated text on canvas
+    showLevelUpText();
     
     // Play celebratory sound with more notes
     if (soundEnabled && audioContext) {
@@ -441,6 +556,104 @@ function createLevelUpEffect() {
     }
 }
 
+// Show animated "LEVEL UP!" text on canvas
+let levelUpTextAlpha = 0;
+let levelUpTextScale = 0;
+let levelUpTextY = 0;
+let levelUpTextActive = false;
+
+function showLevelUpText() {
+    levelUpTextAlpha = 1;
+    levelUpTextScale = 0.1; // Start with small scale, not 0
+    levelUpTextY = 0;
+    levelUpTextActive = true;
+    
+    const duration = 1800; // 1.8 seconds
+    const startTime = Date.now();
+    
+    function animateText() {
+        if (!levelUpTextActive) return;
+        
+        const elapsed = Date.now() - startTime;
+        const progress = elapsed / duration;
+        
+        if (progress < 1) {
+            // Scale up with bounce effect
+            if (progress < 0.2) {
+                levelUpTextScale = 0.1 + (progress * 5); // Quick scale from 0.1 to 1.1
+            } else if (progress < 0.3) {
+                levelUpTextScale = 1.1 + ((progress - 0.2) * 3); // Bounce to 1.4
+            } else if (progress < 0.5) {
+                levelUpTextScale = 1.4 - ((progress - 0.3) * 1); // Settle to 1.2
+            } else {
+                levelUpTextScale = 1.2; // Hold at 1.2
+            }
+            
+            // Fly upward
+            levelUpTextY = -progress * 150;
+            
+            // Fade out in last 40%
+            if (progress > 0.6) {
+                levelUpTextAlpha = 1 - ((progress - 0.6) / 0.4);
+            } else {
+                levelUpTextAlpha = 1;
+            }
+            
+            requestAnimationFrame(animateText);
+        } else {
+            levelUpTextActive = false;
+            levelUpTextAlpha = 0;
+            levelUpTextScale = 0;
+        }
+    }
+    
+    animateText();
+}
+
+function drawLevelUpText() {
+    if (!levelUpTextActive) return;
+    
+    ctx.save();
+    
+    // Draw text with scale and position animation
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2 + levelUpTextY;
+    
+    ctx.translate(centerX, centerY);
+    ctx.scale(levelUpTextScale, levelUpTextScale);
+    ctx.globalAlpha = levelUpTextAlpha;
+    
+    // Multi-layer glow effect
+    ctx.shadowBlur = 25;
+    ctx.shadowColor = '#FFD700';
+    
+    // Draw stroke first
+    ctx.font = 'bold 40px Arial';
+    ctx.strokeStyle = '#FF1744';
+    ctx.lineWidth = 3;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.strokeText('LEVEL UP!', 0, 0);
+    
+    // Inner text with gradient
+    const gradient = ctx.createLinearGradient(0, -25, 0, 25);
+    gradient.addColorStop(0, '#FFF700');
+    gradient.addColorStop(0.5, '#FFD700');
+    gradient.addColorStop(1, '#FF9500');
+    ctx.fillStyle = gradient;
+    ctx.fillText('LEVEL UP!', 0, 0);
+    
+    // Add sparkle effect (dimmer)
+    ctx.shadowBlur = 35;
+    ctx.shadowColor = '#FFFFFF';
+    ctx.font = 'bold 42px Arial';
+    ctx.globalAlpha = levelUpTextAlpha * 0.3;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText('LEVEL UP!', 0, 0);
+    
+    ctx.restore();
+}
+
 // Update Score Display
 function updateScore() {
     const scoreEl = document.getElementById('score');
@@ -458,6 +671,17 @@ function updateScore() {
 
 // Handle Keyboard Input
 function handleKeyPress(e) {
+    // Allow restart when game over animation is complete (progress = 1)
+    if (isGameOver && gameOverAnimation.progress >= 1) {
+        console.log('Key pressed during game over:', e.key, 'progress:', gameOverAnimation.progress);
+        if (e.key === ' ' || e.key === 'Enter') {
+            e.preventDefault();
+            console.log('Restarting game via keyboard...');
+            restartGame();
+            return;
+        }
+    }
+    
     if (isGameOver) return;
     
     // Pause with P or Escape key
@@ -525,7 +749,7 @@ function startBackgroundMusic() {
     let noteIndex = 0;
     
     function playNextNote() {
-        if (!musicEnabled) return;
+        if (!musicEnabled || inDangerZone) return;
         
         const note = melody[noteIndex % melody.length];
         
@@ -548,6 +772,45 @@ function startBackgroundMusic() {
     }
     
     playNextNote();
+}
+
+function startDangerMusic() {
+    if (!musicEnabled || !audioContext || bgMusicOscillator) return;
+    
+    // Fast, urgent alert pattern
+    const dangerPattern = [
+        {freq: 880, duration: 0.15},   // A5 - high urgent beep
+        {freq: 740, duration: 0.15},   // F#5
+        {freq: 880, duration: 0.15},   // A5
+        {freq: 740, duration: 0.15},   // F#5
+    ];
+    
+    let noteIndex = 0;
+    
+    function playNextDangerNote() {
+        if (!musicEnabled || !inDangerZone) return;
+        
+        const note = dangerPattern[noteIndex % dangerPattern.length];
+        
+        bgMusicOscillator = audioContext.createOscillator();
+        bgMusicGain = audioContext.createGain();
+        
+        bgMusicOscillator.connect(bgMusicGain);
+        bgMusicGain.connect(audioContext.destination);
+        
+        bgMusicOscillator.type = 'square'; // Harsher sound for urgency
+        bgMusicOscillator.frequency.setValueAtTime(note.freq, audioContext.currentTime);
+        bgMusicGain.gain.setValueAtTime(0.08, audioContext.currentTime);
+        bgMusicGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + note.duration);
+        
+        bgMusicOscillator.start(audioContext.currentTime);
+        bgMusicOscillator.stop(audioContext.currentTime + note.duration);
+        
+        noteIndex++;
+        bgMusicInterval = setTimeout(playNextDangerNote, note.duration * 1000);
+    }
+    
+    playNextDangerNote();
 }
 
 function stopBackgroundMusic() {
@@ -644,8 +907,8 @@ function createParticles(x, y, count, color) {
         particles.push({
             x: x * BLOCK_SIZE + BLOCK_SIZE / 2,
             y: y * BLOCK_SIZE + BLOCK_SIZE / 2,
-            vx: (Math.random() - 0.5) * 5,
-            vy: (Math.random() - 0.5) * 5 - 2,
+            vx: (Math.random() - 0.5) * 8,
+            vy: (Math.random() - 0.5) * 8 - 3,
             life: 1,
             color: color || '#FFD700'
         });
@@ -653,8 +916,6 @@ function createParticles(x, y, count, color) {
 }
 
 function updateParticles() {
-    particleCtx.clearRect(0, 0, particleCanvas.width, particleCanvas.height);
-    
     for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i];
         
@@ -665,15 +926,8 @@ function updateParticles() {
         
         if (p.life <= 0) {
             particles.splice(i, 1);
-            continue;
         }
-        
-        particleCtx.globalAlpha = p.life;
-        particleCtx.fillStyle = p.color;
-        particleCtx.fillRect(p.x, p.y, 4, 4);
     }
-    
-    particleCtx.globalAlpha = 1;
 }
 
 // Setup Mobile Controls
@@ -737,12 +991,20 @@ function setupCanvasTouchControls() {
     }, { passive: false });
     
     canvas.addEventListener('touchend', (e) => {
-        if (isPaused || !currentPiece) return;
         e.preventDefault();
         const touch = e.changedTouches[0];
         const touchEndX = touch.clientX;
         const touchEndY = touch.clientY;
         const touchEndTime = Date.now();
+        
+        // Allow restart on tap when game over animation is complete
+        if (isGameOver && gameOverAnimation.progress >= 1) {
+            console.log('Tap detected on game over screen, restarting...');
+            restartGame();
+            return;
+        }
+        
+        if (isPaused || !currentPiece) return;
         
         const deltaX = touchEndX - touchStartX;
         const deltaY = touchEndY - touchStartY;
@@ -801,6 +1063,11 @@ function update(currentTime) {
         updateParticles();
     } else if (isPaused) {
         gameLoop = requestAnimationFrame(update);
+    } else if (isGameOver) {
+        // Keep game loop running during and after game over
+        gameLoop = requestAnimationFrame(update);
+        draw();
+        updateParticles();
     }
 }
 
@@ -825,6 +1092,126 @@ function draw() {
     if (currentPiece) {
         drawPiece(currentPiece, ctx);
     }
+    
+    // Draw particles
+    drawParticles();
+    
+    // Draw level up text animation
+    drawLevelUpText();
+    
+    // Draw game over animation
+    drawGameOverAnimation();
+}
+
+function drawGameOverAnimation() {
+    if (!gameOverAnimation.active) return;
+    
+    ctx.save();
+    
+    // Darken background gradually
+    ctx.fillStyle = `rgba(0, 0, 0, ${gameOverAnimation.progress * 0.7})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw "GAME OVER" text rising from bottom
+    if (gameOverAnimation.textAlpha > 0) {
+        ctx.globalAlpha = gameOverAnimation.textAlpha;
+        
+        // Multi-layer text effect
+        ctx.shadowBlur = 25;
+        ctx.shadowColor = '#FF1744';
+        
+        ctx.font = 'bold 48px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Red stroke
+        ctx.strokeStyle = '#FF1744';
+        ctx.lineWidth = 4;
+        ctx.strokeText('GAME OVER', canvas.width / 2, gameOverAnimation.textY);
+        
+        // White fill with gradient
+        const gradient = ctx.createLinearGradient(0, gameOverAnimation.textY - 30, 0, gameOverAnimation.textY + 30);
+        gradient.addColorStop(0, '#FFFFFF');
+        gradient.addColorStop(0.5, '#FFD700');
+        gradient.addColorStop(1, '#FF9500');
+        ctx.fillStyle = gradient;
+        ctx.fillText('GAME OVER', canvas.width / 2, gameOverAnimation.textY);
+    }
+    
+    // Draw stats below text
+    if (gameOverAnimation.statsAlpha > 0) {
+        ctx.globalAlpha = gameOverAnimation.statsAlpha;
+        
+        const statsStartY = gameOverAnimation.textY + 70;
+        const statSpacing = 55;
+        
+        // Draw stats with better styling
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Score
+        ctx.font = 'bold 14px Arial';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = '#00F5FF';
+        ctx.fillText('SCORE', canvas.width / 2, statsStartY);
+        
+        ctx.font = 'bold 26px Arial';
+        ctx.fillStyle = '#00F5FF';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#00F5FF';
+        ctx.fillText(score, canvas.width / 2, statsStartY + 20);
+        
+        // Lines
+        ctx.font = 'bold 14px Arial';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = '#FBFF00';
+        ctx.fillText('LINES', canvas.width / 2, statsStartY + statSpacing);
+        
+        ctx.font = 'bold 26px Arial';
+        ctx.fillStyle = '#FBFF00';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#FBFF00';
+        ctx.fillText(lines, canvas.width / 2, statsStartY + statSpacing + 20);
+        
+        // Level
+        ctx.font = 'bold 14px Arial';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+        ctx.shadowBlur = 5;
+        ctx.shadowColor = '#FF10F0';
+        ctx.fillText('LEVEL', canvas.width / 2, statsStartY + statSpacing * 2);
+        
+        ctx.font = 'bold 26px Arial';
+        ctx.fillStyle = '#FF10F0';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#FF10F0';
+        ctx.fillText(level, canvas.width / 2, statsStartY + statSpacing * 2 + 20);
+        
+        // Restart instruction with pulsing effect
+        const pulseAlpha = 0.5 + Math.sin(Date.now() / 300) * 0.5;
+        ctx.globalAlpha = gameOverAnimation.statsAlpha * pulseAlpha;
+        ctx.font = 'bold 18px Arial';
+        ctx.fillStyle = '#FFD700';
+        ctx.shadowBlur = 10;
+        ctx.shadowColor = '#FFD700';
+        ctx.fillText('TAP TO RESTART', canvas.width / 2, statsStartY + statSpacing * 2 + 60);
+    }
+    
+    ctx.restore();
+}
+
+// Draw particles on main canvas
+function drawParticles() {
+    ctx.save();
+    for (let i = 0; i < particles.length; i++) {
+        const p = particles[i];
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, 4, 4);
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
 }
 
 // Draw Grid
@@ -836,28 +1223,54 @@ function drawGrid() {
                 const y = row * BLOCK_SIZE;
                 const color = grid[row][col];
                 
-                // Create gradient for 3D effect
-                const gradient = ctx.createLinearGradient(x, y, x + BLOCK_SIZE, y + BLOCK_SIZE);
-                gradient.addColorStop(0, color);
-                gradient.addColorStop(1, shadeColor(color, -30));
-                ctx.fillStyle = gradient;
-                ctx.fillRect(x, y, BLOCK_SIZE - 1, BLOCK_SIZE - 1);
+                // Apply game over fade wave effect
+                let blockAlpha = 1;
+                if (gameOverAnimation.active && gameOverAnimation.fadeWave > 0) {
+                    // Fade from bottom to top
+                    const fadeThreshold = (ROWS - row) / ROWS;
+                    if (gameOverAnimation.fadeWave >= fadeThreshold) {
+                        blockAlpha = Math.max(0, 1 - ((gameOverAnimation.fadeWave - fadeThreshold) * 5));
+                    }
+                }
                 
-                // Add top shine
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
-                ctx.fillRect(x, y, BLOCK_SIZE - 1, 4);
+                // Check if this block is in a flashing line
+                const isFlashing = flashingLines.active && 
+                    (flashingLines.rows.includes(row) || flashingLines.cols.includes(col));
+                const flashOn = isFlashing && (flashingLines.flashCount % 2 === 0);
                 
-                // Add left shine
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-                ctx.fillRect(x, y, 4, BLOCK_SIZE - 1);
+                ctx.save();
+                ctx.globalAlpha = blockAlpha;
                 
-                // Add bottom shadow
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-                ctx.fillRect(x, y + BLOCK_SIZE - 4, BLOCK_SIZE - 1, 3);
+                if (flashOn) {
+                    // Draw white flash
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.fillRect(x, y, BLOCK_SIZE - 1, BLOCK_SIZE - 1);
+                } else {
+                    // Create gradient for 3D effect
+                    const gradient = ctx.createLinearGradient(x, y, x + BLOCK_SIZE, y + BLOCK_SIZE);
+                    gradient.addColorStop(0, color);
+                    gradient.addColorStop(1, shadeColor(color, -30));
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(x, y, BLOCK_SIZE - 1, BLOCK_SIZE - 1);
+                    
+                    // Add top shine
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+                    ctx.fillRect(x, y, BLOCK_SIZE - 1, 4);
+                    
+                    // Add left shine
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                    ctx.fillRect(x, y, 4, BLOCK_SIZE - 1);
+                    
+                    // Add bottom shadow
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                    ctx.fillRect(x, y + BLOCK_SIZE - 4, BLOCK_SIZE - 1, 3);
+                    
+                    // Add right shadow
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                    ctx.fillRect(x + BLOCK_SIZE - 4, y, 3, BLOCK_SIZE - 1);
+                }
                 
-                // Add right shadow
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-                ctx.fillRect(x + BLOCK_SIZE - 4, y, 3, BLOCK_SIZE - 1);
+                ctx.restore();
             }
         }
     }
@@ -881,7 +1294,7 @@ function drawGrid() {
 
 // Draw Warning Line
 function drawWarningLine() {
-    const warningRow = 6; // 3 rows before danger zone (which starts at row 3)
+    const warningRow = 7; // 3 rows before danger zone (which starts at row 4)
     const warningY = warningRow * BLOCK_SIZE;
     
     // Find highest block position
@@ -899,14 +1312,14 @@ function drawWarningLine() {
     // Determine line color and animation based on block height
     let lineColor, lineWidth, shouldPulse;
     
-    if (highestBlock <= 4) {
-        // Red + pulsing (blocks at row 4 or higher - critical warning)
+    if (highestBlock <= 5) {
+        // Red + pulsing (blocks at row 5 or higher - critical warning)
         const pulseIntensity = Math.sin(Date.now() / 150) * 0.3 + 0.7;
         lineColor = `rgba(255, 0, 0, ${pulseIntensity})`;
         lineWidth = 3 + Math.sin(Date.now() / 150) * 1;
         shouldPulse = true;
-    } else if (highestBlock <= 5) {
-        // Yellow (blocks at row 5 - caution)
+    } else if (highestBlock <= 6) {
+        // Yellow (blocks at row 6 - caution)
         lineColor = 'rgba(255, 200, 0, 0.8)';
         lineWidth = 3;
         shouldPulse = false;
@@ -1021,16 +1434,73 @@ function gameOver() {
     isGameOver = true;
     playSound('gameOver');
     stopBackgroundMusic();
-    cancelAnimationFrame(gameLoop);
     
     // Remove shake effect
-    document.querySelector('.game-container').classList.remove('danger');
+    document.querySelector('.canvas-container').classList.remove('danger');
     
-    // Remove shake effect
-    document.querySelector('.game-container').classList.remove('danger');
+    // Start game over animation
+    startGameOverAnimation();
+}
+
+function startGameOverAnimation() {
+    gameOverAnimation.active = true;
+    gameOverAnimation.progress = 0;
+    gameOverAnimation.fadeWave = 0;
+    gameOverAnimation.textY = canvas.height;
+    gameOverAnimation.textAlpha = 0;
+    gameOverAnimation.statsAlpha = 0;
     
-    // Remove shake effect
-    document.querySelector('.game-container').classList.remove('danger');
+    const duration = 2500;
+    const startTime = Date.now();
+    
+    function animate() {
+        if (!gameOverAnimation.active) return;
+        
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        gameOverAnimation.progress = progress;
+        
+        // Wave fade from bottom to top (0 to 1 over first 40%)
+        if (progress < 0.4) {
+            gameOverAnimation.fadeWave = progress / 0.4;
+        } else {
+            gameOverAnimation.fadeWave = 1;
+        }
+        
+        // Text rises from bottom (starts at 30%, ends at 70%)
+        if (progress > 0.3 && progress < 0.7) {
+            const textProgress = (progress - 0.3) / 0.4;
+            gameOverAnimation.textY = canvas.height - (textProgress * canvas.height * 0.6);
+            gameOverAnimation.textAlpha = textProgress;
+        } else if (progress >= 0.7) {
+            gameOverAnimation.textY = canvas.height * 0.4;
+            gameOverAnimation.textAlpha = 1;
+        }
+        
+        // Stats fade in (starts at 60%)
+        if (progress > 0.6) {
+            gameOverAnimation.statsAlpha = (progress - 0.6) / 0.4;
+        }
+        
+        if (progress < 1) {
+            requestAnimationFrame(animate);
+        } else {
+            // Animation complete, keep it on screen
+            console.log('Game over animation complete! Progress:', gameOverAnimation.progress);
+            // Don't call showGameOverScreen() - just update high score
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('lineBreakerHighScore', highScore);
+                document.getElementById('highScore').textContent = highScore;
+            }
+        }
+    }
+    
+    animate();
+}
+
+function showGameOverScreen() {
+    gameOverAnimation.active = false;
     
     // Update high score if beaten
     if (score > highScore) {
@@ -1046,6 +1516,9 @@ function gameOver() {
     document.getElementById('finalLevel').textContent = level;
     document.getElementById('finalHighScore').textContent = highScore;
     document.getElementById('gameOver').classList.remove('hidden');
+    
+    // Stop the game loop after overlay is shown
+    cancelAnimationFrame(gameLoop);
     document.getElementById('pauseBtn').classList.add('hidden');
 }
 
