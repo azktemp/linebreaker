@@ -1379,7 +1379,7 @@ function startGameOverAnimation() {
     gameOverAnimation.textAlpha = 0;
     gameOverAnimation.statsAlpha = 0;
     
-    const duration = 2500;
+    const duration = 1500; // Reduced to match fade wave completion time
     const startTime = Date.now();
     
     function animate() {
