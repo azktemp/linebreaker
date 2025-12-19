@@ -63,6 +63,9 @@ let particles = [];
 // Level up animation
 let levelUpAnimation = null;
 
+// Score popup animations
+let scorePopups = [];
+
 // Game over animation
 let gameOverAnimation = {
     active: false,
@@ -438,7 +441,11 @@ function clearLines() {
             const baseScore = linesCleared === 1 ? 100 : 
                              linesCleared === 2 ? 300 :
                              linesCleared === 3 ? 500 : 800;
-            score += baseScore * level;
+            const earnedScore = baseScore * level;
+            score += earnedScore;
+            
+            // Create score popup animation
+            createScorePopup(earnedScore);
             
             // Update score/level display first
             updateScore();
@@ -952,6 +959,66 @@ function updateParticles() {
     }
 }
 
+// Score popup animation
+function createScorePopup(points) {
+    scorePopups.push({
+        text: `+${points}`,
+        x: canvas.width / 2,
+        y: canvas.height - 100,
+        alpha: 1,
+        scale: 0.1,
+        life: 1
+    });
+}
+
+function updateScorePopups() {
+    for (let i = scorePopups.length - 1; i >= 0; i--) {
+        const popup = scorePopups[i];
+        
+        // Rise upward
+        popup.y -= 2;
+        
+        // Bounce scale animation
+        if (popup.scale < 1) {
+            popup.scale += 0.08;
+        }
+        
+        // Fade out near the end
+        popup.life -= 0.015;
+        if (popup.life < 0.3) {
+            popup.alpha = popup.life / 0.3;
+        }
+        
+        if (popup.life <= 0) {
+            scorePopups.splice(i, 1);
+        }
+    }
+}
+
+function drawScorePopups() {
+    ctx.save();
+    for (const popup of scorePopups) {
+        ctx.globalAlpha = popup.alpha;
+        ctx.font = `bold ${32 * popup.scale}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Glow effect
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = '#FFD700';
+        
+        // Gold gradient
+        const gradient = ctx.createLinearGradient(0, popup.y - 20, 0, popup.y + 20);
+        gradient.addColorStop(0, '#FFD700');
+        gradient.addColorStop(0.5, '#FFA500');
+        gradient.addColorStop(1, '#FF8C00');
+        ctx.fillStyle = gradient;
+        
+        ctx.fillText(popup.text, popup.x, popup.y);
+    }
+    ctx.restore();
+}
+
 // Setup Mobile Controls
 function setupMobileControls() {
     // Canvas touch/swipe controls
@@ -1076,6 +1143,7 @@ function update(currentTime) {
         
         draw();
         updateParticles();
+        updateScorePopups();
     } else if (isPaused) {
         gameLoop = requestAnimationFrame(update);
     } else if (isGameOver) {
@@ -1083,6 +1151,7 @@ function update(currentTime) {
         gameLoop = requestAnimationFrame(update);
         draw();
         updateParticles();
+        updateScorePopups();
     }
 }
 
@@ -1110,6 +1179,9 @@ function draw() {
     
     // Draw particles
     drawParticles();
+    
+    // Draw score popups
+    drawScorePopups();
     
     // Draw level up text animation
     drawLevelUpText();
@@ -1205,8 +1277,29 @@ function drawGrid() {
     }
     
     // Draw grid lines
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-    ctx.lineWidth = 1;
+    // Check if we should pulse grid lines red (when warning line is red)
+    let shouldPulseGrid = false;
+    let highestBlock = ROWS;
+    for (let row = 0; row < ROWS; row++) {
+        for (let col = 0; col < COLS; col++) {
+            if (grid[row][col]) {
+                highestBlock = Math.min(highestBlock, row);
+                break;
+            }
+        }
+        if (highestBlock < ROWS) break;
+    }
+    
+    if (highestBlock <= 5) {
+        shouldPulseGrid = true;
+        const pulseIntensity = Math.sin(Date.now() / 150) * 0.3 + 0.7;
+        ctx.strokeStyle = `rgba(255, 0, 0, ${pulseIntensity * 0.4})`;
+        ctx.lineWidth = 1.5;
+    } else {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 1;
+    }
+    
     for (let row = 0; row <= ROWS; row++) {
         ctx.beginPath();
         ctx.moveTo(0, row * BLOCK_SIZE);
