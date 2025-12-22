@@ -99,6 +99,24 @@ function init() {
     highScore = parseInt(localStorage.getItem('lineBreakerHighScore')) || 0;
     document.getElementById('highScore').textContent = highScore;
     
+    // Load sound and music preferences
+    const savedSound = localStorage.getItem('lineBreakerSoundEnabled');
+    const savedMusic = localStorage.getItem('lineBreakerMusicEnabled');
+    
+    if (savedSound !== null) {
+        soundEnabled = savedSound === 'true';
+        const soundBtn = document.getElementById('soundToggle');
+        soundBtn.textContent = soundEnabled ? '🔊' : '🔇';
+        soundBtn.classList.toggle('muted', !soundEnabled);
+    }
+    
+    if (savedMusic !== null) {
+        musicEnabled = savedMusic === 'true';
+        const musicBtn = document.getElementById('musicToggle');
+        musicBtn.textContent = musicEnabled ? '🎵' : '🎶';
+        musicBtn.classList.toggle('muted', !musicEnabled);
+    }
+    
     // Initialize empty grid
     for (let row = 0; row < ROWS; row++) {
         grid[row] = [];
@@ -718,6 +736,7 @@ function handleKeyPress(e) {
 // Sound Functions
 function toggleSound() {
     soundEnabled = !soundEnabled;
+    localStorage.setItem('lineBreakerSoundEnabled', soundEnabled);
     const btn = document.getElementById('soundToggle');
     btn.textContent = soundEnabled ? '🔊' : '🔇';
     btn.classList.toggle('muted', !soundEnabled);
@@ -725,6 +744,7 @@ function toggleSound() {
 
 function toggleMusic() {
     musicEnabled = !musicEnabled;
+    localStorage.setItem('lineBreakerMusicEnabled', musicEnabled);
     const btn = document.getElementById('musicToggle');
     btn.textContent = musicEnabled ? '🎵' : '🎶';
     btn.classList.toggle('muted', !musicEnabled);
