@@ -152,6 +152,9 @@ function init() {
     // Mobile touch controls
     setupMobileControls();
     
+    // Desktop mouse controls
+    setupMouseControls();
+    
     // Show tutorial automatically on page load
     showTutorial();
 }
@@ -715,20 +718,26 @@ function handleKeyPress(e) {
     
     switch(e.key) {
         case 'ArrowLeft':
+        case 'a':
+        case 'A':
             move(-1);
             break;
         case 'ArrowRight':
+        case 'd':
+        case 'D':
             move(1);
             break;
         case 'ArrowDown':
-            drop();
+        case 's':
+        case 'S':
+            hardDrop();
             break;
         case 'ArrowUp':
-            rotate();
-            break;
+        case 'w':
+        case 'W':
         case ' ':
             e.preventDefault();
-            hardDrop();
+            rotate();
             break;
     }
 }
@@ -1149,6 +1158,98 @@ function setupCanvasTouchControls() {
         
         isDragging = false;
     }, { passive: false });
+}
+
+// Desktop Mouse Controls
+function setupMouseControls() {
+    let mouseStartX = 0;
+    let mouseStartY = 0;
+    let lastMoveX = 0;
+    let isDragging = false;
+    let isMouseDown = false;
+    const clickThreshold = 200; // Maximum time for click (ms)
+    const dragThreshold = 10; // Minimum distance to start dragging
+    let mouseDownTime = 0;
+    
+    canvas.addEventListener('mousedown', (e) => {
+        if (isPaused || !currentPiece || isGameOver) return;
+        e.preventDefault();
+        mouseStartX = e.clientX;
+        mouseStartY = e.clientY;
+        lastMoveX = e.clientX;
+        mouseDownTime = Date.now();
+        isDragging = false;
+        isMouseDown = true;
+    });
+    
+    canvas.addEventListener('mousemove', (e) => {
+        if (!isMouseDown || isPaused || !currentPiece || isGameOver) return;
+        e.preventDefault();
+        
+        const currentX = e.clientX;
+        const deltaX = currentX - mouseStartX;
+        const absDeltaX = Math.abs(deltaX);
+        
+        // Start dragging if moved enough horizontally
+        if (!isDragging && absDeltaX > dragThreshold) {
+            isDragging = true;
+        }
+        
+        // Handle horizontal dragging
+        if (isDragging) {
+            const rect = canvas.getBoundingClientRect();
+            const blockWidth = rect.width / COLS;
+            const moveDistance = currentX - lastMoveX;
+            
+            // Move piece if dragged more than half a block width
+            if (Math.abs(moveDistance) >= blockWidth / 2) {
+                const direction = moveDistance > 0 ? 1 : -1;
+                move(direction);
+                lastMoveX = currentX;
+            }
+        }
+    });
+    
+    canvas.addEventListener('mouseup', (e) => {
+        if (!isMouseDown) return;
+        e.preventDefault();
+        
+        const mouseEndTime = Date.now();
+        const deltaTime = mouseEndTime - mouseDownTime;
+        const deltaX = e.clientX - mouseStartX;
+        const absDeltaX = Math.abs(deltaX);
+        
+        isMouseDown = false;
+        
+        if (isPaused || !currentPiece || isGameOver) {
+            isDragging = false;
+            return;
+        }
+        
+        // If was dragging, don't process as click
+        if (isDragging) {
+            isDragging = false;
+            return;
+        }
+        
+        // Click to rotate (quick click without much movement)
+        if (deltaTime < clickThreshold && absDeltaX < dragThreshold) {
+            rotate();
+        }
+        
+        isDragging = false;
+    });
+    
+    // Handle mouse leaving canvas
+    canvas.addEventListener('mouseleave', () => {
+        isMouseDown = false;
+        isDragging = false;
+    });
+    
+    // Prevent context menu on right-click
+    canvas.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+    });
 }
 
 // Game Loop
