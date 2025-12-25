@@ -592,7 +592,7 @@ function clearLines() {
             if (newLevel > level) {
                 level = newLevel;
                 // Speed increases with each level
-                dropInterval = Math.max(100, 700 - (level * 25));
+                dropInterval = Math.max(100, 700 - (level * 20));
             }
             
             // Score calculation: more points for multiple lines and higher levels
@@ -685,9 +685,9 @@ function dropColumn(col) {
 
 // Explode Bomb - clears 3x3 area
 function explodeBomb(bombRow, bombCol) {
-    // Clear 3x3 area around bomb
-    for (let row = Math.max(0, bombRow - 1); row <= Math.min(ROWS - 1, bombRow + 1); row++) {
-        for (let col = Math.max(0, bombCol - 1); col <= Math.min(COLS - 1, bombCol + 1); col++) {
+    // Clear 5x5 area around bomb
+    for (let row = Math.max(0, bombRow - 2); row <= Math.min(ROWS - 1, bombRow + 2); row++) {
+        for (let col = Math.max(0, bombCol - 2); col <= Math.min(COLS - 1, bombCol + 2); col++) {
             if (grid[row][col]) {
                 // Create explosion particles
                 createParticles(col, row, 12, grid[row][col]);
@@ -699,7 +699,7 @@ function explodeBomb(bombRow, bombCol) {
     }
 
     // Drop all columns affected in the correct gravity direction
-    for (let col = Math.max(0, bombCol - 1); col <= Math.min(COLS - 1, bombCol + 1); col++) {
+    for (let col = Math.max(0, bombCol - 2); col <= Math.min(COLS - 1, bombCol + 2); col++) {
         dropColumn(col);
     }
 }
@@ -769,19 +769,33 @@ function shiftGravity() {
         createParticles(randomX, randomY, 4, randomColor);
     }
     
-    // Play gravity shift sound
+    // Play gravity shift sound: whoosh + chime
     if (soundEnabled && audioContext) {
-        const oscillator = audioContext.createOscillator();
-        oscillator.type = 'sawtooth';
-        oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.3);
-        const gain = audioContext.createGain();
-        gain.gain.setValueAtTime(0.3, audioContext.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
-        oscillator.connect(gain);
-        gain.connect(audioContext.destination);
-        oscillator.start();
-        oscillator.stop(audioContext.currentTime + 0.3);
+        const now = audioContext.currentTime;
+        // Whoosh (rising pitch, short)
+        const whooshOsc = audioContext.createOscillator();
+        const whooshGain = audioContext.createGain();
+        whooshOsc.type = 'triangle';
+        whooshOsc.frequency.setValueAtTime(180, now);
+        whooshOsc.frequency.exponentialRampToValueAtTime(900, now + 0.22);
+        whooshGain.gain.setValueAtTime(0.32, now);
+        whooshGain.gain.exponentialRampToValueAtTime(0.01, now + 0.22);
+        whooshOsc.connect(whooshGain);
+        whooshGain.connect(audioContext.destination);
+        whooshOsc.start(now);
+        whooshOsc.stop(now + 0.22);
+
+        // Chime (after whoosh)
+        const chimeOsc = audioContext.createOscillator();
+        const chimeGain = audioContext.createGain();
+        chimeOsc.type = 'sine';
+        chimeOsc.frequency.setValueAtTime(1047, now + 0.18); // C6
+        chimeGain.gain.setValueAtTime(0.18, now + 0.18);
+        chimeGain.gain.exponentialRampToValueAtTime(0.01, now + 0.38);
+        chimeOsc.connect(chimeGain);
+        chimeGain.connect(audioContext.destination);
+        chimeOsc.start(now + 0.18);
+        chimeOsc.stop(now + 0.38);
     }
 }
 
