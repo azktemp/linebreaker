@@ -33,9 +33,22 @@ const SHAPES = [
     [[0, 1], [1, 1]] // Small reverse L (3 dots)
 ];
 
+// Special Block Types
+const BLOCK_TYPES = {
+    NORMAL: 0,
+    BOMB: 1
+};
+
+// Gravity Directions
+const GRAVITY = {
+    DOWN: 0,
+    UP: 1
+};
+
 // Game State
 let canvas, ctx;
 let grid = [];
+let blockTypes = []; // Track special block types
 let currentPiece = null;
 let nextPiece = null;
 let score = 0;
@@ -48,6 +61,13 @@ let lastDropTime = 0;
 let isGameOver = false;
 let isPaused = false;
 let inDangerZone = false;
+
+// Gravity Shift
+let currentGravity = GRAVITY.DOWN;
+let gravityShiftInterval = 25000; // 25 seconds
+let lastGravityShift = 0;
+let gravityWarning = false;
+let gravityWarningTime = 0;
 
 // Audio
 let audioContext;
@@ -173,16 +193,23 @@ function startGame() {
     nextPiece = createPiece();
     spawnPiece();
     if (musicEnabled) startBackgroundMusic();
+    
+    // Initialize gravity shift timer to current time
+    lastGravityShift = performance.now();
+    
     gameLoop = requestAnimationFrame(update);
 }
 
 // Reset Game
 function resetGame() {
     grid = [];
+    blockTypes = [];
     for (let row = 0; row < ROWS; row++) {
         grid[row] = [];
+        blockTypes[row] = [];
         for (let col = 0; col < COLS; col++) {
             grid[row][col] = 0;
+            blockTypes[row][col] = BLOCK_TYPES.NORMAL;
         }
     }
     score = 0;
@@ -191,6 +218,9 @@ function resetGame() {
     dropInterval = 700;
     isGameOver = false;
     inDangerZone = false;
+    currentGravity = GRAVITY.DOWN;
+    lastGravityShift = 0;
+    gravityWarning = false;
     
     // Reset game over animation
     gameOverAnimation.active = false;
@@ -237,18 +267,33 @@ function restartGame() {
 // Create Random Piece
 function createPiece() {
     const shapeIndex = Math.floor(Math.random() * SHAPES.length);
-    return {
+    const piece = {
         shape: SHAPES[shapeIndex],
         color: COLORS[shapeIndex],
         x: Math.floor(COLS / 2) - 1,
-        y: 0
+        y: 0,
+        hasBomb: Math.random() < 0.1 // 10% chance of bomb block
     };
+    return piece;
 }
 
 // Spawn New Piece
 function spawnPiece() {
     currentPiece = nextPiece;
     nextPiece = createPiece();
+    
+    // Set X position (centered)
+    currentPiece.x = Math.floor(COLS / 2) - 1;
+    
+    // Spawn at appropriate position based on gravity
+    if (currentGravity === GRAVITY.DOWN) {
+        // Normal gravity: spawn at top
+        currentPiece.y = 0;
+    } else {
+        // UP gravity: spawn at bottom
+        const pieceHeight = currentPiece.shape.length;
+        currentPiece.y = ROWS - pieceHeight;
+    }
     
     // Check if piece can be placed (game over check)
     if (collision(currentPiece.x, currentPiece.y, currentPiece.shape)) {
@@ -264,13 +309,13 @@ function collision(x, y, shape) {
                 const newX = x + col;
                 const newY = y + row;
                 
-                // Check boundaries
-                if (newX < 0 || newX >= COLS || newY >= ROWS) {
+                // Check boundaries - handle both gravity directions
+                if (newX < 0 || newX >= COLS || newY < 0 || newY >= ROWS) {
                     return true;
                 }
                 
                 // Check if position is already occupied
-                if (newY >= 0 && grid[newY][newX]) {
+                if (grid[newY][newX]) {
                     return true;
                 }
             }
@@ -317,7 +362,9 @@ function rotate() {
 function drop() {
     if (isGameOver || !currentPiece) return;
     
-    const newY = currentPiece.y + 1;
+    // Move based on gravity direction
+    const newY = currentGravity === GRAVITY.DOWN ? currentPiece.y + 1 : currentPiece.y - 1;
+    
     if (!collision(currentPiece.x, newY, currentPiece.shape)) {
         currentPiece.y = newY;
         draw();
@@ -333,9 +380,18 @@ function drop() {
 function hardDrop() {
     if (isGameOver || !currentPiece) return;
     
-    while (!collision(currentPiece.x, currentPiece.y + 1, currentPiece.shape)) {
-        currentPiece.y++;
-        score += 2; // Bonus points for hard drop
+    // Drop based on gravity direction
+    if (currentGravity === GRAVITY.DOWN) {
+        while (!collision(currentPiece.x, currentPiece.y + 1, currentPiece.shape)) {
+            currentPiece.y++;
+            score += 2; // Bonus points for hard drop
+        }
+    } else {
+        // UP gravity - drop to top
+        while (!collision(currentPiece.x, currentPiece.y - 1, currentPiece.shape)) {
+            currentPiece.y--;
+            score += 2; // Bonus points for hard drop
+        }
     }
     playSound('hardDrop');
     lockPiece();
@@ -348,6 +404,26 @@ function hardDrop() {
 function lockPiece() {
     const shape = currentPiece.shape;
     
+    // Find center block for bomb placement (if piece has bomb)
+    let bombRow = -1, bombCol = -1;
+    if (currentPiece.hasBomb) {
+        let blockCount = 0;
+        let totalRow = 0, totalCol = 0;
+        for (let row = 0; row < shape.length; row++) {
+            for (let col = 0; col < shape[row].length; col++) {
+                if (shape[row][col]) {
+                    totalRow += currentPiece.y + row;
+                    totalCol += currentPiece.x + col;
+                    blockCount++;
+                }
+            }
+        }
+        if (blockCount > 0) {
+            bombRow = Math.round(totalRow / blockCount);
+            bombCol = Math.round(totalCol / blockCount);
+        }
+    }
+    
     for (let row = 0; row < shape.length; row++) {
         for (let col = 0; col < shape[row].length; col++) {
             if (shape[row][col]) {
@@ -355,21 +431,42 @@ function lockPiece() {
                 const gridX = currentPiece.x + col;
                 if (gridY >= 0) {
                     grid[gridY][gridX] = currentPiece.color;
+                    // Mark bomb block
+                    if (gridY === bombRow && gridX === bombCol && currentPiece.hasBomb) {
+                        blockTypes[gridY][gridX] = BLOCK_TYPES.BOMB;
+                    } else {
+                        blockTypes[gridY][gridX] = BLOCK_TYPES.NORMAL;
+                    }
                 }
             }
         }
     }
     
-    // Check if ANY blocks exist in danger zone (top 4 rows)
+    // Check if ANY blocks exist in danger zone
+    // Danger zone changes based on gravity direction
     let dangerZone = false;
-    for (let row = 0; row < 4; row++) {
-        for (let col = 0; col < COLS; col++) {
-            if (grid[row][col]) {
-                dangerZone = true;
-                break;
+    if (currentGravity === GRAVITY.DOWN) {
+        // Normal gravity: danger zone is top 4 rows
+        for (let row = 0; row < 4; row++) {
+            for (let col = 0; col < COLS; col++) {
+                if (grid[row][col]) {
+                    dangerZone = true;
+                    break;
+                }
             }
+            if (dangerZone) break;
         }
-        if (dangerZone) break;
+    } else {
+        // UP gravity: danger zone is bottom 4 rows
+        for (let row = ROWS - 4; row < ROWS; row++) {
+            for (let col = 0; col < COLS; col++) {
+                if (grid[row][col]) {
+                    dangerZone = true;
+                    break;
+                }
+            }
+            if (dangerZone) break;
+        }
     }
     
     // Add danger visual effect and switch music if blocks are in danger zone
@@ -423,6 +520,30 @@ function clearLines() {
     // If there are lines to clear, flash them first
     if (rowsToClear.length > 0 || colsToClear.length > 0) {
         flashLines(rowsToClear, colsToClear, () => {
+            // Check for bomb blocks in cleared lines and trigger explosions
+            let bombsTriggered = [];
+            
+            // Check rows for bombs
+            for (let row of rowsToClear) {
+                for (let col = 0; col < COLS; col++) {
+                    if (blockTypes[row][col] === BLOCK_TYPES.BOMB) {
+                        bombsTriggered.push({row, col});
+                    }
+                }
+            }
+            
+            // Check columns for bombs
+            for (let col of colsToClear) {
+                for (let row = 0; row < ROWS; row++) {
+                    if (blockTypes[row][col] === BLOCK_TYPES.BOMB) {
+                        // Avoid duplicates
+                        if (!bombsTriggered.some(b => b.row === row && b.col === col)) {
+                            bombsTriggered.push({row, col});
+                        }
+                    }
+                }
+            }
+            
             // Clear rows
             for (let i = rowsToClear.length - 1; i >= 0; i--) {
                 const row = rowsToClear[i];
@@ -431,7 +552,14 @@ function clearLines() {
                     createParticles(col, row, 6, grid[row][col]);
                 }
                 grid.splice(row, 1);
-                grid.unshift(new Array(COLS).fill(0));
+                blockTypes.splice(row, 1);
+                if (currentGravity === GRAVITY.DOWN) {
+                    grid.unshift(new Array(COLS).fill(0));
+                    blockTypes.unshift(new Array(COLS).fill(BLOCK_TYPES.NORMAL));
+                } else {
+                    grid.push(new Array(COLS).fill(0));
+                    blockTypes.push(new Array(COLS).fill(BLOCK_TYPES.NORMAL));
+                }
                 linesCleared++;
             }
             
@@ -441,10 +569,19 @@ function clearLines() {
                 for (let row = 0; row < ROWS; row++) {
                     createParticles(col, row, 6, grid[row][col]);
                     grid[row][col] = 0;
+                    blockTypes[row][col] = BLOCK_TYPES.NORMAL;
                 }
                 // Drop blocks above
                 dropColumn(col);
                 linesCleared++;
+            }
+            
+            // Trigger bomb explosions
+            if (bombsTriggered.length > 0) {
+                for (let bomb of bombsTriggered) {
+                    explodeBomb(bomb.row, bomb.col);
+                }
+                playSound('bomb');
             }
             
             playSound('lineClear');
@@ -517,11 +654,114 @@ function dropColumn(col) {
             for (let r = row - 1; r >= 0; r--) {
                 if (grid[r][col] !== 0) {
                     grid[row][col] = grid[r][col];
+                    blockTypes[row][col] = blockTypes[r][col];
                     grid[r][col] = 0;
+                    blockTypes[r][col] = BLOCK_TYPES.NORMAL;
                     break;
                 }
             }
         }
+    }
+}
+
+// Explode Bomb - clears 3x3 area
+function explodeBomb(bombRow, bombCol) {
+    // Clear 3x3 area around bomb
+    for (let row = Math.max(0, bombRow - 1); row <= Math.min(ROWS - 1, bombRow + 1); row++) {
+        for (let col = Math.max(0, bombCol - 1); col <= Math.min(COLS - 1, bombCol + 1); col++) {
+            if (grid[row][col]) {
+                // Create explosion particles
+                createParticles(col, row, 12, grid[row][col]);
+                grid[row][col] = 0;
+                blockTypes[row][col] = BLOCK_TYPES.NORMAL;
+                score += 10; // Bonus points for bomb clears
+            }
+        }
+    }
+    
+    // Drop all columns affected
+    for (let col = Math.max(0, bombCol - 1); col <= Math.min(COLS - 1, bombCol + 1); col++) {
+        dropColumn(col);
+    }
+}
+
+// Shift Gravity Direction
+function shiftGravity() {
+    // Calculate current piece's relative position before flip
+    let pieceRelativeY = null;
+    if (currentPiece) {
+        const pieceHeight = currentPiece.shape.length;
+        if (currentGravity === GRAVITY.DOWN) {
+            // Distance from top
+            pieceRelativeY = currentPiece.y;
+        } else {
+            // Distance from bottom
+            pieceRelativeY = (ROWS - currentPiece.y - pieceHeight);
+        }
+    }
+    
+    // Toggle between UP and DOWN
+    currentGravity = currentGravity === GRAVITY.DOWN ? GRAVITY.UP : GRAVITY.DOWN;
+    
+    // FLIP THE ENTIRE GRID VERTICALLY
+    flipGrid();
+    
+    // Reposition the current piece to maintain relative position
+    if (currentPiece && pieceRelativeY !== null) {
+        const pieceHeight = currentPiece.shape.length;
+        if (currentGravity === GRAVITY.DOWN) {
+            // Now falling down, maintain distance from top
+            currentPiece.y = pieceRelativeY;
+        } else {
+            // Now falling up, maintain distance from bottom
+            currentPiece.y = ROWS - pieceRelativeY - pieceHeight;
+        }
+        
+        // If new position causes collision, adjust to safe position
+        if (collision(currentPiece.x, currentPiece.y, currentPiece.shape)) {
+            if (currentGravity === GRAVITY.DOWN) {
+                currentPiece.y = 0;
+            } else {
+                currentPiece.y = ROWS - pieceHeight;
+            }
+        }
+    }
+    
+    // Create visual effect
+    const colors = ['#FF006E', '#00F5FF', '#FBFF00', '#FF5F00'];
+    for (let i = 0; i < 40; i++) {
+        const randomX = Math.floor(Math.random() * COLS);
+        const randomY = Math.floor(Math.random() * ROWS);
+        const randomColor = colors[Math.floor(Math.random() * colors.length)];
+        createParticles(randomX, randomY, 4, randomColor);
+    }
+    
+    // Play gravity shift sound
+    if (soundEnabled && audioContext) {
+        const oscillator = audioContext.createOscillator();
+        oscillator.type = 'sawtooth';
+        oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(600, audioContext.currentTime + 0.3);
+        const gain = audioContext.createGain();
+        gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3);
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.3);
+    }
+}
+
+// Flip the entire grid vertically
+function flipGrid() {
+    // Reverse the grid array (flip vertically)
+    grid.reverse();
+    blockTypes.reverse();
+    
+    // Each row also needs to be recreated to maintain references
+    for (let row = 0; row < ROWS; row++) {
+        grid[row] = [...grid[row]];
+        blockTypes[row] = [...blockTypes[row]];
     }
 }
 
@@ -680,6 +920,43 @@ function drawLevelUpText() {
     ctx.restore();
 }
 
+// Draw Gravity Indicator and Warning
+function drawGravityIndicator() {
+    // Show gravity direction indicator
+    const gravityText = currentGravity === GRAVITY.DOWN ? '↓ DOWN' : '↑ UP';
+    const gravityColor = currentGravity === GRAVITY.DOWN ? '#00FF9F' : '#FF006E';
+    ctx.save();
+    ctx.font = 'bold 20px Arial';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = gravityColor;
+    ctx.shadowBlur = 8;
+    ctx.shadowColor = gravityColor;
+    ctx.fillText(`Gravity: ${gravityText}`, canvas.width - 10, 10);
+    ctx.restore();
+    
+    // Show warning countdown
+    if (gravityWarning) {
+        const timeLeft = Math.ceil((3000 - (performance.now() - gravityWarningTime)) / 1000);
+        if (timeLeft > 0) {
+            ctx.save();
+            ctx.font = 'bold 32px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            
+            // Pulse effect
+            const pulse = Math.sin(performance.now() / 150) * 0.2 + 0.8;
+            ctx.globalAlpha = pulse;
+            
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#FFD700';
+            ctx.fillStyle = '#FFD700';
+            ctx.fillText(`GRAVITY SHIFT IN ${timeLeft}!`, canvas.width / 2, 40);
+            ctx.restore();
+        }
+    }
+}
+
 // Update Score Display
 function updateScore() {
     const scoreEl = document.getElementById('score');
@@ -730,11 +1007,27 @@ function handleKeyPress(e) {
         case 'ArrowDown':
         case 's':
         case 'S':
-            hardDrop();
+            // Hard drop based on gravity direction
+            if (currentGravity === GRAVITY.DOWN) {
+                hardDrop();
+            } else {
+                // In UP gravity, down arrow rotates
+                rotate();
+            }
             break;
         case 'ArrowUp':
         case 'w':
         case 'W':
+            // Hard drop based on gravity direction
+            if (currentGravity === GRAVITY.UP) {
+                e.preventDefault();
+                hardDrop();
+            } else {
+                // In DOWN gravity, up arrow rotates
+                e.preventDefault();
+                rotate();
+            }
+            break;
         case ' ':
             e.preventDefault();
             rotate();
@@ -956,6 +1249,29 @@ function playSound(type) {
             oscillator.start(now);
             oscillator.stop(now + 0.15);
             break;
+            
+        case 'bomb':
+            // Explosion sound effect
+            oscillator.type = 'sawtooth';
+            oscillator.frequency.setValueAtTime(400, now);
+            oscillator.frequency.exponentialRampToValueAtTime(50, now + 0.3);
+            gainNode.gain.setValueAtTime(0.3, now);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+            oscillator.start(now);
+            oscillator.stop(now + 0.3);
+            
+            // Add crackle effect
+            const noise = audioContext.createOscillator();
+            const noiseGain = audioContext.createGain();
+            noise.connect(noiseGain);
+            noiseGain.connect(audioContext.destination);
+            noise.type = 'square';
+            noise.frequency.setValueAtTime(100, now);
+            noiseGain.gain.setValueAtTime(0.15, now);
+            noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+            noise.start(now);
+            noise.stop(now + 0.2);
+            break;
     }
 }
 
@@ -1133,9 +1449,15 @@ function setupCanvasTouchControls() {
         if (deltaTime < tapThreshold && absDeltaX < swipeThreshold && absDeltaY < swipeThreshold) {
             rotate();
         }
-        // Swipe down for hard drop
-        else if (absDeltaY > absDeltaX && deltaY > swipeThreshold) {
-            hardDrop();
+        // Hard drop based on gravity direction
+        else if (absDeltaY > absDeltaX) {
+            if (currentGravity === GRAVITY.DOWN && deltaY > swipeThreshold) {
+                // Swipe down for hard drop when gravity is DOWN
+                hardDrop();
+            } else if (currentGravity === GRAVITY.UP && deltaY < -swipeThreshold) {
+                // Swipe up for hard drop when gravity is UP
+                hardDrop();
+            }
         }
         // Swipe left - multi-column based on distance
         else if (absDeltaX > absDeltaY && deltaX < -swipeThreshold) {
@@ -1257,6 +1579,19 @@ function update(currentTime) {
     if (!isGameOver && !isPaused) {
         gameLoop = requestAnimationFrame(update);
         
+        // Gravity shift warning (3 seconds before shift)
+        if (currentTime - lastGravityShift > gravityShiftInterval - 3000 && !gravityWarning) {
+            gravityWarning = true;
+            gravityWarningTime = currentTime;
+        }
+        
+        // Trigger gravity shift
+        if (currentTime - lastGravityShift > gravityShiftInterval) {
+            shiftGravity();
+            lastGravityShift = currentTime;
+            gravityWarning = false;
+        }
+        
         if (currentTime - lastDropTime > dropInterval) {
             drop();
             lastDropTime = currentTime;
@@ -1306,6 +1641,9 @@ function draw() {
     
     // Draw level up text animation
     drawLevelUpText();
+    
+    // Draw gravity warning and indicator
+    drawGravityIndicator();
     
     // Draw game over animation
     drawGameOverAnimation();
@@ -1390,6 +1728,19 @@ function drawGrid() {
                     // Add right shadow
                     ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
                     ctx.fillRect(x + BLOCK_SIZE - 4, y, 3, BLOCK_SIZE - 1);
+                    
+                    // Draw bomb indicator if this is a bomb block
+                    if (blockTypes[row][col] === BLOCK_TYPES.BOMB) {
+                        ctx.save();
+                        ctx.shadowBlur = 10;
+                        ctx.shadowColor = '#FF0000';
+                        ctx.fillStyle = '#FF0000';
+                        ctx.font = 'bold 18px Arial';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText('💣', x + BLOCK_SIZE / 2, y + BLOCK_SIZE / 2);
+                        ctx.restore();
+                    }
                 }
                 
                 ctx.restore();
@@ -1398,21 +1749,38 @@ function drawGrid() {
     }
     
     // Draw grid lines
-    // Check if we should pulse grid lines red (when warning line is red)
+    // Check if we should pulse grid lines red based on danger zone
     let shouldPulseGrid = false;
-    let highestBlock = ROWS;
-    for (let row = 0; row < ROWS; row++) {
-        for (let col = 0; col < COLS; col++) {
-            if (grid[row][col]) {
-                highestBlock = Math.min(highestBlock, row);
-                break;
+    
+    if (currentGravity === GRAVITY.DOWN) {
+        // Normal gravity: check top rows
+        let highestBlock = ROWS;
+        for (let row = 0; row < ROWS; row++) {
+            for (let col = 0; col < COLS; col++) {
+                if (grid[row][col]) {
+                    highestBlock = Math.min(highestBlock, row);
+                    break;
+                }
             }
+            if (highestBlock < ROWS) break;
         }
-        if (highestBlock < ROWS) break;
+        shouldPulseGrid = highestBlock <= 5;
+    } else {
+        // UP gravity: check bottom rows
+        let lowestBlock = -1;
+        for (let row = ROWS - 1; row >= 0; row--) {
+            for (let col = 0; col < COLS; col++) {
+                if (grid[row][col]) {
+                    lowestBlock = Math.max(lowestBlock, row);
+                    break;
+                }
+            }
+            if (lowestBlock >= 0) break;
+        }
+        shouldPulseGrid = lowestBlock >= ROWS - 6;
     }
     
-    if (highestBlock <= 5) {
-        shouldPulseGrid = true;
+    if (shouldPulseGrid) {
         const pulseIntensity = Math.sin(Date.now() / 150) * 0.3 + 0.7;
         ctx.strokeStyle = `rgba(255, 0, 0, ${pulseIntensity * 0.4})`;
         ctx.lineWidth = 1.5;
@@ -1437,40 +1805,84 @@ function drawGrid() {
 
 // Draw Warning Line
 function drawWarningLine() {
-    const warningRow = 7; // 3 rows before danger zone (which starts at row 4)
-    const warningY = warningRow * BLOCK_SIZE;
+    // Warning line position changes based on gravity
+    let warningRow, warningY;
+    let highestBlock, lowestBlock;
     
-    // Find highest block position
-    let highestBlock = ROWS;
-    for (let row = 0; row < ROWS; row++) {
-        for (let col = 0; col < COLS; col++) {
-            if (grid[row][col]) {
-                highestBlock = Math.min(highestBlock, row);
-                break;
+    if (currentGravity === GRAVITY.DOWN) {
+        // Normal gravity: warning line near top
+        warningRow = 7; // 3 rows before danger zone (which starts at row 4)
+        warningY = warningRow * BLOCK_SIZE;
+        
+        // Find highest block position
+        highestBlock = ROWS;
+        for (let row = 0; row < ROWS; row++) {
+            for (let col = 0; col < COLS; col++) {
+                if (grid[row][col]) {
+                    highestBlock = Math.min(highestBlock, row);
+                    break;
+                }
             }
+            if (highestBlock < ROWS) break;
         }
-        if (highestBlock < ROWS) break;
+    } else {
+        // UP gravity: warning line near bottom
+        warningRow = ROWS - 8; // 3 rows before danger zone (which starts at row ROWS-4)
+        warningY = warningRow * BLOCK_SIZE;
+        
+        // Find lowest block position
+        lowestBlock = -1;
+        for (let row = ROWS - 1; row >= 0; row--) {
+            for (let col = 0; col < COLS; col++) {
+                if (grid[row][col]) {
+                    lowestBlock = Math.max(lowestBlock, row);
+                    break;
+                }
+            }
+            if (lowestBlock >= 0) break;
+        }
     }
     
     // Determine line color and animation based on block height
     let lineColor, lineWidth, shouldPulse;
     
-    if (highestBlock <= 5) {
-        // Red + pulsing (blocks at row 5 or higher - critical warning)
-        const pulseIntensity = Math.sin(Date.now() / 150) * 0.3 + 0.7;
-        lineColor = `rgba(255, 0, 0, ${pulseIntensity})`;
-        lineWidth = 3 + Math.sin(Date.now() / 150) * 1;
-        shouldPulse = true;
-    } else if (highestBlock <= 6) {
-        // Yellow (blocks at row 6 - caution)
-        lineColor = 'rgba(255, 200, 0, 0.8)';
-        lineWidth = 3;
-        shouldPulse = false;
+    if (currentGravity === GRAVITY.DOWN) {
+        if (highestBlock <= 5) {
+            // Red + pulsing (blocks at row 5 or higher - critical warning)
+            const pulseIntensity = Math.sin(Date.now() / 150) * 0.3 + 0.7;
+            lineColor = `rgba(255, 0, 0, ${pulseIntensity})`;
+            lineWidth = 3 + Math.sin(Date.now() / 150) * 1;
+            shouldPulse = true;
+        } else if (highestBlock <= 6) {
+            // Yellow (blocks at row 6 - caution)
+            lineColor = 'rgba(255, 200, 0, 0.8)';
+            lineWidth = 3;
+            shouldPulse = false;
+        } else {
+            // Green (safe zone)
+            lineColor = 'rgba(0, 255, 100, 0.6)';
+            lineWidth = 2;
+            shouldPulse = false;
+        }
     } else {
-        // Green (safe zone)
-        lineColor = 'rgba(0, 255, 100, 0.6)';
-        lineWidth = 2;
-        shouldPulse = false;
+        // UP gravity
+        if (lowestBlock >= ROWS - 6) {
+            // Red + pulsing (blocks at row ROWS-6 or lower - critical warning)
+            const pulseIntensity = Math.sin(Date.now() / 150) * 0.3 + 0.7;
+            lineColor = `rgba(255, 0, 0, ${pulseIntensity})`;
+            lineWidth = 3 + Math.sin(Date.now() / 150) * 1;
+            shouldPulse = true;
+        } else if (lowestBlock >= ROWS - 7) {
+            // Yellow (blocks at row ROWS-7 - caution)
+            lineColor = 'rgba(255, 200, 0, 0.8)';
+            lineWidth = 3;
+            shouldPulse = false;
+        } else {
+            // Green (safe zone)
+            lineColor = 'rgba(0, 255, 100, 0.6)';
+            lineWidth = 2;
+            shouldPulse = false;
+        }
     }
     
     // Draw the warning line
@@ -1526,6 +1938,26 @@ function drawPiece(piece, context) {
     const shape = piece.shape;
     const color = piece.color;
     
+    // Find center block for bomb indicator
+    let centerRow = -1, centerCol = -1;
+    if (piece.hasBomb) {
+        let blockCount = 0;
+        let totalRow = 0, totalCol = 0;
+        for (let row = 0; row < shape.length; row++) {
+            for (let col = 0; col < shape[row].length; col++) {
+                if (shape[row][col]) {
+                    totalRow += row;
+                    totalCol += col;
+                    blockCount++;
+                }
+            }
+        }
+        if (blockCount > 0) {
+            centerRow = Math.round(totalRow / blockCount);
+            centerCol = Math.round(totalCol / blockCount);
+        }
+    }
+    
     for (let row = 0; row < shape.length; row++) {
         for (let col = 0; col < shape[row].length; col++) {
             if (shape[row][col]) {
@@ -1554,6 +1986,19 @@ function drawPiece(piece, context) {
                 // Add right shadow
                 context.fillStyle = 'rgba(0, 0, 0, 0.3)';
                 context.fillRect(x + BLOCK_SIZE - 4, y, 3, BLOCK_SIZE - 1);
+                
+                // Draw bomb indicator on center block
+                if (piece.hasBomb && row === centerRow && col === centerCol) {
+                    context.save();
+                    context.shadowBlur = 10;
+                    context.shadowColor = '#FF0000';
+                    context.fillStyle = '#FF0000';
+                    context.font = 'bold 18px Arial';
+                    context.textAlign = 'center';
+                    context.textBaseline = 'middle';
+                    context.fillText('💣', x + BLOCK_SIZE / 2, y + BLOCK_SIZE / 2);
+                    context.restore();
+                }
             }
         }
     }
