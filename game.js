@@ -648,16 +648,35 @@ function flashLines(rows, cols, callback) {
 
 // Drop Column After Vertical Line Clear
 function dropColumn(col) {
-    for (let row = ROWS - 1; row >= 0; row--) {
-        if (grid[row][col] === 0) {
-            // Find next non-empty cell above
-            for (let r = row - 1; r >= 0; r--) {
-                if (grid[r][col] !== 0) {
-                    grid[row][col] = grid[r][col];
-                    blockTypes[row][col] = blockTypes[r][col];
-                    grid[r][col] = 0;
-                    blockTypes[r][col] = BLOCK_TYPES.NORMAL;
-                    break;
+    if (currentGravity === GRAVITY.DOWN) {
+        // Drop blocks downwards (from top to bottom)
+        for (let row = ROWS - 1; row >= 0; row--) {
+            if (grid[row][col] === 0) {
+                // Find next non-empty cell above
+                for (let r = row - 1; r >= 0; r--) {
+                    if (grid[r][col] !== 0) {
+                        grid[row][col] = grid[r][col];
+                        blockTypes[row][col] = blockTypes[r][col];
+                        grid[r][col] = 0;
+                        blockTypes[r][col] = BLOCK_TYPES.NORMAL;
+                        break;
+                    }
+                }
+            }
+        }
+    } else {
+        // Drop blocks upwards (from bottom to top)
+        for (let row = 0; row < ROWS; row++) {
+            if (grid[row][col] === 0) {
+                // Find next non-empty cell below
+                for (let r = row + 1; r < ROWS; r++) {
+                    if (grid[r][col] !== 0) {
+                        grid[row][col] = grid[r][col];
+                        blockTypes[row][col] = blockTypes[r][col];
+                        grid[r][col] = 0;
+                        blockTypes[r][col] = BLOCK_TYPES.NORMAL;
+                        break;
+                    }
                 }
             }
         }
@@ -678,8 +697,8 @@ function explodeBomb(bombRow, bombCol) {
             }
         }
     }
-    
-    // Drop all columns affected
+
+    // Drop all columns affected in the correct gravity direction
     for (let col = Math.max(0, bombCol - 1); col <= Math.min(COLS - 1, bombCol + 1); col++) {
         dropColumn(col);
     }
@@ -1902,36 +1921,38 @@ function drawWarningLine() {
 function drawGhostPiece() {
     if (!currentPiece) return;
     
-    // Calculate ghost position (where piece will land)
+    // Calculate ghost position (where piece will land), gravity-aware
     let ghostY = currentPiece.y;
-    while (!collision(currentPiece.x, ghostY + 1, currentPiece.shape)) {
-        ghostY++;
+    if (currentGravity === GRAVITY.DOWN) {
+        while (!collision(currentPiece.x, ghostY + 1, currentPiece.shape)) {
+            ghostY++;
+        }
+        // Only draw ghost if it's below the current piece
+        if (ghostY <= currentPiece.y) return;
+    } else {
+        while (!collision(currentPiece.x, ghostY - 1, currentPiece.shape)) {
+            ghostY--;
+        }
+        // Only draw ghost if it's above the current piece
+        if (ghostY >= currentPiece.y) return;
     }
-    
-    // Only draw ghost if it's below the current piece
-    if (ghostY > currentPiece.y) {
-        const shape = currentPiece.shape;
-        
-        // Draw ghost piece with semi-transparent outline
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([4, 4]); // Dashed outline
-        
-        for (let row = 0; row < shape.length; row++) {
-            for (let col = 0; col < shape[row].length; col++) {
-                if (shape[row][col]) {
-                    const x = (currentPiece.x + col) * BLOCK_SIZE;
-                    const y = (ghostY + row) * BLOCK_SIZE;
-                    
-                    // Draw dashed outline
-                    ctx.strokeRect(x + 1, y + 1, BLOCK_SIZE - 3, BLOCK_SIZE - 3);
-                }
+    const shape = currentPiece.shape;
+    // Draw ghost piece with semi-transparent outline
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 4]); // Dashed outline
+    for (let row = 0; row < shape.length; row++) {
+        for (let col = 0; col < shape[row].length; col++) {
+            if (shape[row][col]) {
+                const x = (currentPiece.x + col) * BLOCK_SIZE;
+                const y = (ghostY + row) * BLOCK_SIZE;
+                // Draw dashed outline
+                ctx.strokeRect(x + 1, y + 1, BLOCK_SIZE - 3, BLOCK_SIZE - 3);
             }
         }
-        
-        ctx.setLineDash([]); // Reset to solid line
-        ctx.lineWidth = 1;
     }
+    ctx.setLineDash([]); // Reset to solid line
+    ctx.lineWidth = 1;
 }
 
 // Draw Piece
