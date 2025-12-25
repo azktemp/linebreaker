@@ -592,7 +592,7 @@ function clearLines() {
             if (newLevel > level) {
                 level = newLevel;
                 // Speed increases with each level
-                dropInterval = Math.max(100, 700 - (level * 50));
+                dropInterval = Math.max(100, 700 - (level * 25));
             }
             
             // Score calculation: more points for multiple lines and higher levels
@@ -735,7 +735,30 @@ function shiftGravity() {
             // Now falling up, maintain distance from bottom
             currentPiece.y = ROWS - pieceRelativeY - pieceHeight;
         }
-        
+
+        // Rotate piece 180° to match new gravity
+        let originalShape = JSON.parse(JSON.stringify(currentPiece.shape));
+        let rotated = currentPiece.shape;
+        // Rotate twice (180°)
+        for (let i = 0; i < 2; i++) {
+            const temp = [];
+            for (let col = 0; col < rotated[0].length; col++) {
+                const newRow = [];
+                for (let row = rotated.length - 1; row >= 0; row--) {
+                    newRow.push(rotated[row][col]);
+                }
+                temp.push(newRow);
+            }
+            rotated = temp;
+        }
+        // Try to apply rotation
+        if (!collision(currentPiece.x, currentPiece.y, rotated)) {
+            currentPiece.shape = rotated;
+        } else {
+            // If collision, keep original orientation
+            currentPiece.shape = originalShape;
+        }
+
         // If new position causes collision, adjust to safe position
         if (collision(currentPiece.x, currentPiece.y, currentPiece.shape)) {
             if (currentGravity === GRAVITY.DOWN) {
