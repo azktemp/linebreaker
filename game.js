@@ -736,27 +736,18 @@ function shiftGravity() {
             currentPiece.y = ROWS - pieceRelativeY - pieceHeight;
         }
 
-        // Rotate piece 180° to match new gravity
+        // Vertically flip the piece (except O piece) to preserve landing orientation
         let originalShape = JSON.parse(JSON.stringify(currentPiece.shape));
-        let rotated = currentPiece.shape;
-        // Rotate twice (180°)
-        for (let i = 0; i < 2; i++) {
-            const temp = [];
-            for (let col = 0; col < rotated[0].length; col++) {
-                const newRow = [];
-                for (let row = rotated.length - 1; row >= 0; row--) {
-                    newRow.push(rotated[row][col]);
-                }
-                temp.push(newRow);
+        let isSquare = currentPiece.shape.length === 2 && currentPiece.shape[0].length === 2 &&
+            currentPiece.shape.every(row => row.length === 2) &&
+            currentPiece.shape.flat().every(cell => cell === 1);
+        if (!isSquare) {
+            let flipped = [...currentPiece.shape].reverse();
+            if (!collision(currentPiece.x, currentPiece.y, flipped)) {
+                currentPiece.shape = flipped;
+            } else {
+                currentPiece.shape = originalShape;
             }
-            rotated = temp;
-        }
-        // Try to apply rotation
-        if (!collision(currentPiece.x, currentPiece.y, rotated)) {
-            currentPiece.shape = rotated;
-        } else {
-            // If collision, keep original orientation
-            currentPiece.shape = originalShape;
         }
 
         // If new position causes collision, adjust to safe position
@@ -979,7 +970,7 @@ function drawGravityIndicator() {
     
     // Show warning countdown
     if (gravityWarning) {
-        const timeLeft = Math.ceil((3000 - (performance.now() - gravityWarningTime)) / 1000);
+        const timeLeft = Math.ceil((5000 - (performance.now() - gravityWarningTime)) / 1000);
         if (timeLeft > 0) {
             ctx.save();
             ctx.font = 'bold 20px Arial'; // Smaller font
@@ -1623,7 +1614,7 @@ function update(currentTime) {
         gameLoop = requestAnimationFrame(update);
         
         // Gravity shift warning (3 seconds before shift)
-        if (currentTime - lastGravityShift > gravityShiftInterval - 3000 && !gravityWarning) {
+        if (currentTime - lastGravityShift > gravityShiftInterval - 5000 && !gravityWarning) {
             gravityWarning = true;
             gravityWarningTime = currentTime;
         }
