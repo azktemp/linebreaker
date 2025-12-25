@@ -940,18 +940,19 @@ function drawGravityIndicator() {
         const timeLeft = Math.ceil((3000 - (performance.now() - gravityWarningTime)) / 1000);
         if (timeLeft > 0) {
             ctx.save();
-            ctx.font = 'bold 32px Arial';
+            ctx.font = 'bold 20px Arial'; // Smaller font
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            
             // Pulse effect
             const pulse = Math.sin(performance.now() / 150) * 0.2 + 0.8;
             ctx.globalAlpha = pulse;
-            
-            ctx.shadowBlur = 20;
+            ctx.shadowBlur = 16;
             ctx.shadowColor = '#FFD700';
             ctx.fillStyle = '#FFD700';
-            ctx.fillText(`GRAVITY SHIFT IN ${timeLeft}!`, canvas.width / 2, 40);
+            // Center of grid
+            const centerX = (COLS * BLOCK_SIZE) / 2;
+            const centerY = (ROWS * BLOCK_SIZE) / 2;
+            ctx.fillText(`GRAVITY SHIFT IN ${timeLeft}!`, centerX, centerY);
             ctx.restore();
         }
     }
