@@ -46,11 +46,37 @@ const GRAVITY = {
 };
 
 // Game State
+// Pulse effect for newly locked blocks
+let lastLockedBlocks = [];
+let lastLockPulseStart = 0;
+const LOCK_PULSE_DURATION = 520; // ms (longer)
+// Hard drop animation state
+let hardDropPath = [];
+let hardDropAnimStart = 0;
+const HARD_DROP_ANIM_DURATION = 250; // ms
 let canvas, ctx;
 let grid = [];
 let blockTypes = []; // Track special block types
 let currentPiece = null;
 let nextPiece = null;
+
+// Animated background state
+let bgGradientOffset = 0;
+let bgParticles = [];
+const BG_PARTICLE_COUNT = 18;
+function initBackgroundParticles() {
+    bgParticles = [];
+    for (let i = 0; i < BG_PARTICLE_COUNT; i++) {
+        bgParticles.push({
+            x: Math.random() * COLS * BLOCK_SIZE,
+            y: Math.random() * ROWS * BLOCK_SIZE,
+            r: 12 + Math.random() * 18,
+            speed: 0.12 + Math.random() * 0.18,
+            alpha: 0.08 + Math.random() * 0.10,
+            color: COLORS[Math.floor(Math.random() * COLORS.length)]
+        });
+    }
+}
 let score = 0;
 let lines = 0;
 let level = 1;
@@ -110,6 +136,7 @@ function init() {
     
     // Set viewport height
     setViewportHeight();
+    initBackgroundParticles();
     window.addEventListener('resize', setViewportHeight);
     window.addEventListener('orientationchange', () => {
         setTimeout(setViewportHeight, 100);
@@ -380,20 +407,42 @@ function drop() {
 function hardDrop() {
     if (isGameOver || !currentPiece) return;
     
-    // Drop based on gravity direction
+    // Track path for animation
+    hardDropPath = [];
+    let tempY = currentPiece.y;
     if (currentGravity === GRAVITY.DOWN) {
-        while (!collision(currentPiece.x, currentPiece.y + 1, currentPiece.shape)) {
-            currentPiece.y++;
-            score += 2; // Bonus points for hard drop
+        while (!collision(currentPiece.x, tempY + 1, currentPiece.shape)) {
+            tempY++;
+            // Record all cells the piece passes through
+            const shape = currentPiece.shape;
+            for (let row = 0; row < shape.length; row++) {
+                for (let col = 0; col < shape[row].length; col++) {
+                    if (shape[row][col]) {
+                        hardDropPath.push({row: tempY + row, col: currentPiece.x + col});
+                    }
+                }
+            }
+            score += 2;
         }
+        currentPiece.y = tempY;
     } else {
-        // UP gravity - drop to top
-        while (!collision(currentPiece.x, currentPiece.y - 1, currentPiece.shape)) {
-            currentPiece.y--;
-            score += 2; // Bonus points for hard drop
+        while (!collision(currentPiece.x, tempY - 1, currentPiece.shape)) {
+            tempY--;
+            const shape = currentPiece.shape;
+            for (let row = 0; row < shape.length; row++) {
+                for (let col = 0; col < shape[row].length; col++) {
+                    if (shape[row][col]) {
+                        hardDropPath.push({row: tempY + row, col: currentPiece.x + col});
+                    }
+                }
+            }
+            score += 2;
         }
+        currentPiece.y = tempY;
     }
+    hardDropAnimStart = performance.now();
     playSound('hardDrop');
+    playSound('thunderFlash');
     lockPiece();
     clearLines();
     spawnPiece();
@@ -402,6 +451,8 @@ function hardDrop() {
 
 // Lock Piece to Grid
 function lockPiece() {
+        // Track newly locked blocks for pulse effect
+        lastLockedBlocks = [];
     const shape = currentPiece.shape;
     
     // Find center block for bomb placement (if piece has bomb)
@@ -431,6 +482,8 @@ function lockPiece() {
                 const gridX = currentPiece.x + col;
                 if (gridY >= 0) {
                     grid[gridY][gridX] = currentPiece.color;
+                    // Track for pulse
+                    lastLockedBlocks.push({row: gridY, col: gridX});
                     // Mark bomb block
                     if (gridY === bombRow && gridX === bombCol && currentPiece.hasBomb) {
                         blockTypes[gridY][gridX] = BLOCK_TYPES.BOMB;
@@ -441,6 +494,7 @@ function lockPiece() {
             }
         }
     }
+    lastLockPulseStart = performance.now();
     
     // Check if ANY blocks exist in danger zone
     // Danger zone changes based on gravity direction
@@ -635,7 +689,6 @@ function flashLines(rows, cols, callback) {
     
     const flashTimer = setInterval(() => {
         flashingLines.flashCount++;
-        
         if (flashingLines.flashCount >= totalFlashes) {
             clearInterval(flashTimer);
             flashingLines.active = false;
@@ -973,12 +1026,11 @@ function drawGravityIndicator() {
     const gravityText = currentGravity === GRAVITY.DOWN ? '↓ DOWN' : '↑ UP';
     const gravityColor = currentGravity === GRAVITY.DOWN ? '#00FF9F' : '#FF006E';
     ctx.save();
-    ctx.font = 'bold 20px Arial';
+    ctx.font = 'bold 14px Arial';
     ctx.textAlign = 'right';
     ctx.textBaseline = 'top';
     ctx.fillStyle = gravityColor;
-    ctx.shadowBlur = 8;
-    ctx.shadowColor = gravityColor;
+    // No shadow for crisp look
     ctx.fillText(`Gravity: ${gravityText}`, canvas.width - 10, 10);
     ctx.restore();
     
@@ -993,9 +1045,9 @@ function drawGravityIndicator() {
             // Pulse effect
             const pulse = Math.sin(performance.now() / 150) * 0.2 + 0.8;
             ctx.globalAlpha = pulse;
-            ctx.shadowBlur = 16;
-            ctx.shadowColor = '#FFD700';
+            ctx.font = 'bold 16px Arial';
             ctx.fillStyle = '#FFD700';
+            // No shadow for crisp look
             // Center of grid
             const centerX = (COLS * BLOCK_SIZE) / 2;
             const centerY = (ROWS * BLOCK_SIZE) / 2;
@@ -1200,6 +1252,36 @@ function stopBackgroundMusic() {
 }
 
 function playSound(type) {
+        // Thunder flash sound helper
+        function playThunderFlash(now) {
+            // Crackling electric sound: short bursty noise + high-pitched zap
+            // Noise burst
+            const bufferSize = audioContext.sampleRate * 0.08;
+            const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 2.5); // fade out
+            }
+            const noise = audioContext.createBufferSource();
+            noise.buffer = buffer;
+            const noiseGain = audioContext.createGain();
+            noiseGain.gain.setValueAtTime(0.22, now);
+            noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+            noise.connect(noiseGain).connect(audioContext.destination);
+            noise.start(now);
+            noise.stop(now + 0.08);
+            // Zap oscillator
+            const zapOsc = audioContext.createOscillator();
+            const zapGain = audioContext.createGain();
+            zapOsc.type = 'sawtooth';
+            zapOsc.frequency.setValueAtTime(1800, now);
+            zapOsc.frequency.exponentialRampToValueAtTime(220, now + 0.13);
+            zapGain.gain.setValueAtTime(0.18, now);
+            zapGain.gain.exponentialRampToValueAtTime(0.01, now + 0.13);
+            zapOsc.connect(zapGain).connect(audioContext.destination);
+            zapOsc.start(now);
+            zapOsc.stop(now + 0.13);
+        }
     if (!soundEnabled || !audioContext) return;
     
     const oscillator = audioContext.createOscillator();
@@ -1211,6 +1293,9 @@ function playSound(type) {
     const now = audioContext.currentTime;
     
     switch(type) {
+                case 'thunderFlash':
+                    playThunderFlash(now);
+                    break;
         case 'move':
             oscillator.type = 'sine';
             oscillator.frequency.setValueAtTime(440, now);
@@ -1648,6 +1733,10 @@ function update(currentTime) {
         draw();
         updateParticles();
         updateScorePopups();
+        // Clear hard drop animation after duration
+        if (hardDropPath.length > 0 && (performance.now() - hardDropAnimStart > HARD_DROP_ANIM_DURATION)) {
+            hardDropPath = [];
+        }
     } else if (isPaused) {
         gameLoop = requestAnimationFrame(update);
     } else if (isGameOver) {
@@ -1661,12 +1750,94 @@ function update(currentTime) {
 
 // Draw Game
 function draw() {
-    // Clear canvas
-    ctx.fillStyle = '#1a1a2e';
+    // --- Animated background ---
+    // Animate vertical gradient
+    bgGradientOffset += 0.3;
+    if (bgGradientOffset > canvas.height) bgGradientOffset = 0;
+    let grad = ctx.createLinearGradient(0, bgGradientOffset, 0, canvas.height + bgGradientOffset);
+    grad.addColorStop(0, '#23234a');
+    grad.addColorStop(0.5, '#1a1a2e');
+    grad.addColorStop(1, '#23234a');
+    ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
+
+    // Floating background particles
+    for (let p of bgParticles) {
+        ctx.save();
+        ctx.globalAlpha = p.alpha;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, 2 * Math.PI);
+        ctx.fillStyle = p.color;
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = 16;
+        ctx.fill();
+        ctx.restore();
+        p.y += p.speed;
+        if (p.y - p.r > canvas.height) {
+            p.y = -p.r;
+            p.x = Math.random() * canvas.width;
+            p.r = 12 + Math.random() * 18;
+            p.alpha = 0.08 + Math.random() * 0.10;
+            p.color = COLORS[Math.floor(Math.random() * COLORS.length)];
+        }
+    }
+
     // Draw grid
     drawGrid();
+
+
+    // Draw hard drop path animation on top of grid
+    if (hardDropPath && hardDropPath.length > 0) {
+        const elapsed = performance.now() - hardDropAnimStart;
+        if (elapsed < HARD_DROP_ANIM_DURATION) {
+            ctx.save();
+            const alpha = 0.85 * (1 - (elapsed / HARD_DROP_ANIM_DURATION));
+            for (let i = 0; i < hardDropPath.length; i++) {
+                const {row, col} = hardDropPath[i];
+                const x = col * BLOCK_SIZE;
+                const y = row * BLOCK_SIZE;
+                // Thunder lightning bolt effect
+                ctx.save();
+                ctx.globalAlpha = alpha;
+                ctx.shadowBlur = 18;
+                ctx.shadowColor = '#FFFF66';
+                ctx.lineWidth = 3 + Math.random() * 1.5;
+                ctx.strokeStyle = '#FFFFCC';
+                ctx.beginPath();
+                // Generate a jagged lightning bolt path
+                const boltPoints = 6;
+                let bx = x + BLOCK_SIZE * 0.2;
+                let by = y + BLOCK_SIZE * 0.15;
+                ctx.moveTo(bx, by);
+                for (let j = 1; j < boltPoints; j++) {
+                    bx = x + BLOCK_SIZE * (0.2 + 0.6 * (j / (boltPoints - 1)) + (Math.random() - 0.5) * 0.08);
+                    by = y + BLOCK_SIZE * (0.15 + 0.7 * (j / (boltPoints - 1)) + (Math.random() - 0.5) * 0.08);
+                    ctx.lineTo(bx, by);
+                }
+                ctx.stroke();
+                // Add a quick white flash overlay for extra impact
+                if (elapsed < HARD_DROP_ANIM_DURATION * 0.3) {
+                    ctx.globalAlpha = alpha * 0.5;
+                    ctx.shadowBlur = 24;
+                    ctx.shadowColor = '#FFFFEE';
+                    ctx.strokeStyle = '#FFFFFF';
+                    ctx.lineWidth = 2.5;
+                    ctx.beginPath();
+                    bx = x + BLOCK_SIZE * 0.2;
+                    by = y + BLOCK_SIZE * 0.15;
+                    ctx.moveTo(bx, by);
+                    for (let j = 1; j < boltPoints; j++) {
+                        bx = x + BLOCK_SIZE * (0.2 + 0.6 * (j / (boltPoints - 1)) + (Math.random() - 0.5) * 0.08);
+                        by = y + BLOCK_SIZE * (0.15 + 0.7 * (j / (boltPoints - 1)) + (Math.random() - 0.5) * 0.08);
+                        ctx.lineTo(bx, by);
+                    }
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+            ctx.restore();
+        }
+    }
     
     // Draw warning line
     drawWarningLine();
@@ -1726,6 +1897,38 @@ function drawParticles() {
 function drawGrid() {
     for (let row = 0; row < ROWS; row++) {
         for (let col = 0; col < COLS; col++) {
+            // Check if this cell is in the hard drop animation path
+            let isHardDropAnim = false;
+            let hardDropAlpha = 0;
+            if (hardDropPath && hardDropPath.length > 0) {
+                for (let i = 0; i < hardDropPath.length; i++) {
+                    if (hardDropPath[i].row === row && hardDropPath[i].col === col) {
+                        // Animation alpha fades out over time
+                        const elapsed = performance.now() - hardDropAnimStart;
+                        if (elapsed < HARD_DROP_ANIM_DURATION) {
+                            isHardDropAnim = true;
+                            hardDropAlpha = 1 - (elapsed / HARD_DROP_ANIM_DURATION);
+                        }
+                        break;
+                    }
+                }
+            }
+            // Check for lock pulse effect
+            let isLockPulse = false;
+            let lockPulseAlpha = 0;
+            if (lastLockedBlocks && lastLockedBlocks.length > 0) {
+                for (let i = 0; i < lastLockedBlocks.length; i++) {
+                    if (lastLockedBlocks[i].row === row && lastLockedBlocks[i].col === col) {
+                        const elapsed = performance.now() - lastLockPulseStart;
+                        if (elapsed < LOCK_PULSE_DURATION) {
+                            isLockPulse = true;
+                            // Pulse: fade out, but also scale up and down
+                            lockPulseAlpha = 0.5 * (1 - elapsed / LOCK_PULSE_DURATION) + 0.5 * Math.abs(Math.sin(elapsed / LOCK_PULSE_DURATION * Math.PI));
+                        }
+                        break;
+                    }
+                }
+            }
             if (grid[row][col]) {
                 const x = col * BLOCK_SIZE;
                 const y = row * BLOCK_SIZE;
@@ -1754,6 +1957,31 @@ function drawGrid() {
                     ctx.fillStyle = '#FFFFFF';
                     ctx.fillRect(x, y, BLOCK_SIZE - 1, BLOCK_SIZE - 1);
                 } else {
+                    if (isHardDropAnim) {
+                        // Animate a white flash that fades out
+                        ctx.save();
+                        ctx.globalAlpha = hardDropAlpha * 0.7;
+                        ctx.fillStyle = '#FFFFFF';
+                        ctx.fillRect(x, y, BLOCK_SIZE - 1, BLOCK_SIZE - 1);
+                        ctx.restore();
+                    }
+                    if (isLockPulse) {
+                        // Draw a much stronger glowing pulse overlay, color-matched to the piece
+                        ctx.save();
+                        ctx.globalAlpha = 0.85 * lockPulseAlpha + 0.15;
+                        ctx.shadowBlur = 32 + 32 * lockPulseAlpha;
+                        ctx.shadowColor = color;
+                        ctx.strokeStyle = color;
+                        ctx.lineWidth = 7 + 4 * lockPulseAlpha;
+                        ctx.strokeRect(x - 2, y - 2, BLOCK_SIZE + 4, BLOCK_SIZE + 4);
+                        // Add a white core for extra pop
+                        ctx.globalAlpha = 0.5 * lockPulseAlpha;
+                        ctx.shadowBlur = 0;
+                        ctx.strokeStyle = '#FFFFFF';
+                        ctx.lineWidth = 2 + 2 * lockPulseAlpha;
+                        ctx.strokeRect(x + 4, y + 4, BLOCK_SIZE - 8, BLOCK_SIZE - 8);
+                        ctx.restore();
+                    }
                     // Create gradient for 3D effect
                     const gradient = ctx.createLinearGradient(x, y, x + BLOCK_SIZE, y + BLOCK_SIZE);
                     gradient.addColorStop(0, color);
