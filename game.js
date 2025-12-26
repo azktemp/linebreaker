@@ -1160,7 +1160,8 @@ function toggleMusic() {
 
 function startBackgroundMusic() {
     if (!musicEnabled || !audioContext || bgMusicOscillator) return;
-    
+
+    // Melody (same as before)
     const melody = [
         {freq: 523.25, duration: 0.3}, // C5
         {freq: 659.25, duration: 0.3}, // E5
@@ -1170,32 +1171,101 @@ function startBackgroundMusic() {
         {freq: 659.25, duration: 0.3}, // E5
         {freq: 523.25, duration: 0.6}, // C5
     ];
-    
+    // Drum pattern: 8 steps per bar (kick, snare, hihat)
+    const drumPattern = [
+        {kick: true, snare: false, hihat: true},
+        {kick: false, snare: false, hihat: true},
+        {kick: false, snare: true, hihat: true},
+        {kick: false, snare: false, hihat: true},
+        {kick: true, snare: false, hihat: true},
+        {kick: false, snare: true, hihat: true},
+        {kick: false, snare: false, hihat: true},
+        {kick: false, snare: false, hihat: true},
+    ];
     let noteIndex = 0;
-    
+    let drumIndex = 0;
+
+    function playDrumStep(stepTime) {
+        const step = drumPattern[drumIndex % drumPattern.length];
+        if (step.kick) {
+            // Kick: short sine burst
+            const osc = audioContext.createOscillator();
+            const gain = audioContext.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(110, stepTime);
+            osc.frequency.linearRampToValueAtTime(55, stepTime + 0.09);
+            gain.gain.setValueAtTime(0.18, stepTime);
+            gain.gain.linearRampToValueAtTime(0.001, stepTime + 0.09);
+            osc.connect(gain).connect(audioContext.destination);
+            osc.start(stepTime);
+            osc.stop(stepTime + 0.09);
+        }
+        if (step.snare) {
+            // Snare: filtered noise burst
+            const bufferSize = audioContext.sampleRate * 0.06;
+            const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+            const noise = audioContext.createBufferSource();
+            noise.buffer = buffer;
+            const filter = audioContext.createBiquadFilter();
+            filter.type = 'highpass';
+            filter.frequency.value = 1200;
+            const gain = audioContext.createGain();
+            gain.gain.value = 0.13;
+            noise.connect(filter).connect(gain).connect(audioContext.destination);
+            noise.start(stepTime);
+            noise.stop(stepTime + 0.06);
+        }
+        if (step.hihat) {
+            // Hi-hat: very short noise burst
+            const bufferSize = audioContext.sampleRate * 0.02;
+            const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+            const noise = audioContext.createBufferSource();
+            noise.buffer = buffer;
+            const filter = audioContext.createBiquadFilter();
+            filter.type = 'highpass';
+            filter.frequency.value = 6000;
+            const gain = audioContext.createGain();
+            gain.gain.value = 0.08;
+            noise.connect(filter).connect(gain).connect(audioContext.destination);
+            noise.start(stepTime);
+            noise.stop(stepTime + 0.02);
+        }
+        drumIndex++;
+    }
+
     function playNextNote() {
         if (!musicEnabled || inDangerZone) return;
-        
+
         const note = melody[noteIndex % melody.length];
-        
+        const now = audioContext.currentTime;
+
+        // Play melody note
         bgMusicOscillator = audioContext.createOscillator();
         bgMusicGain = audioContext.createGain();
-        
         bgMusicOscillator.connect(bgMusicGain);
         bgMusicGain.connect(audioContext.destination);
-        
-        bgMusicOscillator.type = 'sine';
-        bgMusicOscillator.frequency.setValueAtTime(note.freq, audioContext.currentTime);
-        bgMusicGain.gain.setValueAtTime(0.05, audioContext.currentTime);
-        bgMusicGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + note.duration);
-        
-        bgMusicOscillator.start(audioContext.currentTime);
-        bgMusicOscillator.stop(audioContext.currentTime + note.duration);
-        
+        bgMusicOscillator.type = 'triangle';
+        bgMusicOscillator.frequency.setValueAtTime(note.freq, now);
+        bgMusicGain.gain.setValueAtTime(0.06, now);
+        bgMusicGain.gain.exponentialRampToValueAtTime(0.01, now + note.duration);
+        bgMusicOscillator.start(now);
+        bgMusicOscillator.stop(now + note.duration);
+
+        // Play drum step in sync
+        playDrumStep(now);
+
         noteIndex++;
         bgMusicInterval = setTimeout(playNextNote, note.duration * 1000);
     }
-    
+
     playNextNote();
 }
 
