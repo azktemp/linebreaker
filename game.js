@@ -64,6 +64,10 @@ let nextPiece = null;
 let bgGradientOffset = 0;
 let bgParticles = [];
 const BG_PARTICLE_COUNT = 18;
+// --- Club party lights state ---
+let partyLights = [];
+const PARTY_LIGHT_COUNT = 5;
+let partyLightPulse = 0; // 0..1, set to 1 on kick drum
 function initBackgroundParticles() {
     bgParticles = [];
     for (let i = 0; i < BG_PARTICLE_COUNT; i++) {
@@ -76,6 +80,16 @@ function initBackgroundParticles() {
             color: COLORS[Math.floor(Math.random() * COLORS.length)]
         });
     }
+    // Initialize party lights
+    partyLights = [];
+    for (let i = 0; i < PARTY_LIGHT_COUNT; i++) {
+        partyLights.push({
+            x: (i + 0.5) * (COLS * BLOCK_SIZE / PARTY_LIGHT_COUNT),
+            color: COLORS[(i * 2) % COLORS.length],
+            angle: Math.PI / 6 + (i - 2) * 0.18,
+        });
+    }
+    partyLightPulse = 0;
 }
 let score = 0;
 let lines = 0;
@@ -1199,6 +1213,8 @@ function startBackgroundMusic() {
             osc.connect(gain).connect(audioContext.destination);
             osc.start(stepTime);
             osc.stop(stepTime + 0.09);
+            // --- Party light pulse: set to 1 on kick ---
+            partyLightPulse = 1;
         }
         if (step.snare) {
             // Snare: filtered noise burst
@@ -1830,6 +1846,33 @@ function draw() {
     grad.addColorStop(1, '#23234a');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // --- Club party lights (beams) ---
+    if (partyLights && partyLights.length) {
+        // Animate pulse decay
+        if (partyLightPulse > 0) partyLightPulse *= 0.88;
+        for (let l of partyLights) {
+            ctx.save();
+            ctx.globalAlpha = 0.13 + 0.22 * partyLightPulse;
+            ctx.translate(l.x, canvas.height * 0.7);
+            ctx.rotate(l.angle + Math.sin(performance.now() * 0.0007 + l.x) * 0.08);
+            let beamWidth = 44 + 60 * partyLightPulse;
+            let beamLen = canvas.height * 1.2;
+            let grad = ctx.createLinearGradient(0, 0, 0, -beamLen);
+            grad.addColorStop(0, l.color);
+            grad.addColorStop(0.5, l.color + '00');
+            grad.addColorStop(1, l.color + '00');
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.moveTo(-beamWidth / 2, 0);
+            ctx.lineTo(beamWidth / 2, 0);
+            ctx.lineTo(beamWidth * 0.18, -beamLen);
+            ctx.lineTo(-beamWidth * 0.18, -beamLen);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+    }
 
     // Floating background particles
     for (let p of bgParticles) {
